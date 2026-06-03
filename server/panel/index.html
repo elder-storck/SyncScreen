@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SyncScreen — Painel</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    body { background: #f0f2f5; }
+    .tv-card { border-left: 5px solid #6c757d; transition: border-color .3s; }
+    .tv-card.online  { border-left-color: #198754; }
+    .tv-card.offline { border-left-color: #dc3545; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .dot-on  { background: #198754; }
+    .dot-off { background: #dc3545; }
+    .img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .img-item { position: relative; cursor: grab; }
+    .img-item img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; border: 2px solid #dee2e6; }
+    .img-item .del { position: absolute; top: 4px; right: 4px; padding: 0 6px; line-height: 20px; font-size: 12px; }
+    .img-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #6c757d; }
+    #dropzone { border: 2px dashed #adb5bd; border-radius: 8px; padding: 36px 20px; text-align: center; cursor: pointer; transition: all .2s; }
+    #dropzone:hover, #dropzone.drag-over { border-color: #0d6efd; background: #f0f4ff; }
+    .badge-url { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+    #url-row { display: none; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-4 py-2">
+  <span class="navbar-brand fw-bold fs-5">📺 SyncScreen</span>
+  <span class="text-secondary small" id="refresh-time"></span>
+</nav>
+
+<div class="container py-4" style="max-width:1100px">
+
+  <!-- TVs -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+      <h6 class="mb-0 fw-semibold">TVs Registradas</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadTVs()">↻ Atualizar</button>
+    </div>
+    <div class="card-body py-3" id="tv-list">
+      <p class="text-muted mb-0 small">Carregando...</p>
+    </div>
+  </div>
+
+  <!-- Config Global -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2">
+      <h6 class="mb-0 fw-semibold">Configuração Global</h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-sm-3">
+          <label class="form-label small fw-semibold mb-1">Modo de exibição</label>
+          <select class="form-select form-select-sm" id="g-mode" onchange="toggleUrlRow()">
+            <option value="slideshow">🖼 Slideshow</option>
+            <option value="webview">🌐 Site (WebView)</option>
+          </select>
+        </div>
+        <div class="col-sm-5" id="url-row">
+          <label class="form-label small fw-semibold mb-1">URL do site</label>
+          <input class="form-control form-control-sm" id="g-url" type="url" placeholder="https://exemplo.com.br">
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label small fw-semibold mb-1">Intervalo slides (s)</label>
+          <input class="form-control form-control-sm" id="g-interval" type="number" min="1" max="3600" value="5">
+        </div>
+        <div class="col-sm-2">
+          <button class="btn btn-primary btn-sm w-100" onclick="saveGlobal()">Aplicar a todas</button>
+        </div>
+      </div>
+      <div id="global-msg" class="mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Imagens -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2">
+      <h6 class="mb-0 fw-semibold">Imagens do Slideshow</h6>
+    </div>
+    <div class="card-body">
+      <div id="dropzone"
+           onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event)">
+        <div class="fs-4 mb-1">⬆️</div>
+        <div>Clique ou arraste imagens aqui</div>
+        <small class="text-muted">JPG, PNG, GIF, WEBP · máx. 20 MB por imagem</small>
+        <input type="file" id="file-input" multiple accept="image/*" class="d-none" onchange="uploadFiles(this.files)">
+      </div>
+      <div id="upload-msg" class="mt-2"></div>
+      <hr class="my-3">
+      <div id="img-grid" class="img-grid">
+        <p class="text-muted small">Nenhuma imagem cadastrada.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: config por TV -->
+<div class="modal fade" id="tvModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Configurar TV: <strong id="modal-tv-name"></strong></h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modal-tv-id">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Modo</label>
+          <select class="form-select form-select-sm" id="m-mode">
+            <option value="slideshow">🖼 Slideshow</option>
+            <option value="webview">🌐 Site (WebView)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">URL do site</label>
+          <input class="form-control form-control-sm" id="m-url" type="url" placeholder="https://...">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Intervalo slides (s)</label>
+          <input class="form-control form-control-sm" id="m-interval" type="number" min="1" max="3600">
+        </div>
+        <p class="text-muted small mb-0">Campos em branco usam a configuração global.</p>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="resetTV()">Usar config. global</button>
+        <button class="btn btn-sm btn-primary" onclick="saveTV()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let tvModal;
+let globalCfg = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+  tvModal = new bootstrap.Modal(document.getElementById('tvModal'));
+  loadAll();
+  connectWS();
+  setInterval(loadTVs, 10_000);
+});
+
+function loadAll() {
+  loadTVs();
+  loadGlobal();
+  loadImages();
+}
+
+// WebSocket para receber notificações do servidor em tempo real
+function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = ({ data }) => {
+    const msg = JSON.parse(data);
+    if (msg.type === 'tv_updated' || msg.type === 'tv_removed') loadTVs();
+    if (msg.type === 'images_updated') loadImages();
+    if (msg.type === 'config_updated') { loadGlobal(); loadTVs(); }
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+
+// ─── TVs ────────────────────────────────────────────────────────────────────
+
+async function loadTVs() {
+  const tvs = await api('/api/tvs') ?? [];
+  const el = document.getElementById('tv-list');
+  document.getElementById('refresh-time').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
+
+  if (!tvs.length) {
+    el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada. Inicie o app em uma TV.</p>';
+    return;
+  }
+
+  el.innerHTML = tvs.map(tv => `
+    <div class="tv-card card mb-2 ${tv.online ? 'online' : 'offline'}">
+      <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
+        <span><span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
+          <small class="fw-semibold text-${tv.online ? 'success' : 'danger'}">${tv.online ? 'Online' : 'Offline'}</small>
+        </span>
+        <div class="flex-grow-1 overflow-hidden">
+          <div class="fw-semibold text-truncate">${esc(tv.name)}</div>
+          <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
+        </div>
+        <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
+        <button class="btn btn-sm btn-outline-danger"  onclick="deleteTV('${tv.id}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteTV(id) {
+  if (!confirm('Remover esta TV da lista?')) return;
+  await api(`/api/tvs/${id}`, { method: 'DELETE' });
+  loadTVs();
+}
+
+// ─── Configuração global ────────────────────────────────────────────────────
+
+async function loadGlobal() {
+  globalCfg = await api('/api/config') ?? {};
+  document.getElementById('g-mode').value = globalCfg.mode || 'slideshow';
+  document.getElementById('g-url').value  = globalCfg.webview_url || '';
+  document.getElementById('g-interval').value = globalCfg.slide_interval || 5;
+  toggleUrlRow();
+}
+
+function toggleUrlRow() {
+  const mode = document.getElementById('g-mode').value;
+  document.getElementById('url-row').style.display = mode === 'webview' ? '' : 'none';
+}
+
+async function saveGlobal() {
+  const body = {
+    mode:           document.getElementById('g-mode').value,
+    webview_url:    document.getElementById('g-url').value,
+    slide_interval: parseInt(document.getElementById('g-interval').value) || 5,
+  };
+  const ok = await api('/api/config', { method: 'PUT', json: body });
+  flashMsg('global-msg', ok ? 'success' : 'danger', ok ? '✔ Config. salva com sucesso!' : 'Erro ao salvar.');
+}
+
+// ─── Config por TV (modal) ──────────────────────────────────────────────────
+
+async function openTV(id, name) {
+  document.getElementById('modal-tv-id').value = id;
+  document.getElementById('modal-tv-name').textContent = name;
+
+  const cfg = await api(`/api/config/${id}`) ?? globalCfg;
+  document.getElementById('m-mode').value     = cfg.mode || 'slideshow';
+  document.getElementById('m-url').value      = cfg.webview_url || '';
+  document.getElementById('m-interval').value = cfg.slide_interval || globalCfg.slide_interval || 5;
+  tvModal.show();
+}
+
+async function saveTV() {
+  const id = document.getElementById('modal-tv-id').value;
+  await api(`/api/config/${id}`, {
+    method: 'PUT',
+    json: {
+      mode:           document.getElementById('m-mode').value,
+      webview_url:    document.getElementById('m-url').value,
+      slide_interval: parseInt(document.getElementById('m-interval').value) || 5,
+    },
+  });
+  tvModal.hide();
+  loadTVs();
+}
+
+async function resetTV() {
+  const id = document.getElementById('modal-tv-id').value;
+  await api(`/api/config/${id}`, { method: 'DELETE' });
+  tvModal.hide();
+  loadTVs();
+}
+
+// ─── Imagens ────────────────────────────────────────────────────────────────
+
+async function loadImages() {
+  const images = await api('/api/images') ?? [];
+  const grid = document.getElementById('img-grid');
+
+  if (!images.length) {
+    grid.innerHTML = '<p class="text-muted small">Nenhuma imagem. Faça upload acima.</p>';
+    return;
+  }
+
+  grid.innerHTML = images.map(img => `
+    <div class="img-item" data-id="${img.id}">
+      <img src="/uploads/${img.filename}" alt="${esc(img.original_name)}" loading="lazy">
+      <button class="btn btn-danger del" onclick="deleteImg(${img.id})">✕</button>
+      <small title="${esc(img.original_name)}">${esc(img.original_name)}</small>
+    </div>
+  `).join('');
+}
+
+async function deleteImg(id) {
+  if (!confirm('Remover esta imagem?')) return;
+  await api(`/api/images/${id}`, { method: 'DELETE' });
+  loadImages();
+}
+
+// ─── Upload ─────────────────────────────────────────────────────────────────
+
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('drag-over'); }
+function onDragLeave()  { document.getElementById('dropzone').classList.remove('drag-over'); }
+function onDrop(e) { e.preventDefault(); onDragLeave(); uploadFiles(e.dataTransfer.files); }
+
+async function uploadFiles(files) {
+  if (!files?.length) return;
+  const msgEl = document.getElementById('upload-msg');
+  msgEl.innerHTML = '<div class="alert alert-info py-1 small">Enviando...</div>';
+
+  let ok = 0, fail = 0;
+  for (const file of Array.from(files)) {
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/images', { method: 'POST', body: fd });
+    if (res.ok) ok++; else fail++;
+  }
+
+  flashMsg('upload-msg', fail ? 'warning' : 'success',
+    `${ok} imagem(ns) enviada(s)${fail ? ` · ${fail} com erro` : ''}.`);
+  document.getElementById('file-input').value = '';
+  loadImages();
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function api(url, opts = {}) {
+  try {
+    const options = { method: opts.method || 'GET', headers: {} };
+    if (opts.json) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(opts.json);
+    }
+    const res = await fetch(url, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function flashMsg(elId, type, msg) {
+  const el = document.getElementById(elId);
+  el.innerHTML = `<div class="alert alert-${type} py-1 small">${msg}</div>`;
+  setTimeout(() => el.innerHTML = '', 4000);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+  );
+}
+
+function ago(ms) {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 5)    return 'agora';
+  if (s < 60)   return `${s}s atrás`;
+  if (s < 3600) return `${Math.floor(s/60)}min atrás`;
+  return new Date(ms).toLocaleString('pt-BR');
+}
+</script>
+</body>
+</html>
