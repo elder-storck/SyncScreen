@@ -1,0 +1,15 @@
+# Build
+build/
+app/build/
+.gradle/
+
+# Local config (machine-specific)
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Keystore
+*.jks
+*.keystore
