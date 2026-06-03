@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test cache.js</title></head>
+<body>
+<script src="js/cache.js"></script>
+<script>
+function assert(cond, msg) {
+    const p = document.createElement('p');
+    p.style.color = cond ? 'green' : 'red';
+    p.textContent = (cond ? 'PASS' : 'FAIL') + ': ' + msg;
+    document.body.appendChild(p);
+}
+
+async function run() {
+    const blob = new Blob(['fake-image-data'], { type: 'image/jpeg' });
+
+    await Cache.put('test.jpg', blob);
+
+    const url = await Cache.get('test.jpg');
+    assert(url !== null && url.startsWith('blob:'), 'get: returns blob URL after put');
+
+    const keys = await Cache.keys();
+    assert(keys.includes('test.jpg'), 'keys: includes stored filename');
+
+    await Cache.delete('test.jpg');
+
+    const afterDelete = await Cache.get('test.jpg');
+    assert(afterDelete === null, 'get: returns null after delete');
+
+    const keys2 = await Cache.keys();
+    assert(!keys2.includes('test.jpg'), 'keys: does not include deleted filename');
+
+    const missing = await Cache.get('never-stored.jpg');
+    assert(missing === null, 'get: returns null for non-existent key');
+
+    document.body.appendChild(Object.assign(document.createElement('p'), { textContent: 'Done.' }));
+}
+
+run().catch(e => {
+    const p = document.createElement('p');
+    p.style.color = 'red';
+    p.textContent = 'ERROR: ' + e;
+    document.body.appendChild(p);
+});
+</script>
+</body></html>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://milanezmilaneze.com.br/syncscreen"
+        version="1.0.0">
+    <name>MilanezMilaneze</name>
+    <icon src="img/milanez_logo.jpg"/>
+    <content src="index.html"/>
+    <access origin="*" subdomains="true"/>
+    <feature name="http://tizen.org/feature/network.internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/system"/>
+    <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+    <tizen:application id="syncscr001.SyncScreen"
+                       package="syncscr001"
+                       required_version="2.3"/>
+    <tizen:setting screen-orientation="landscape"
+                   context-menu="disable"
+                   background-support="enable"
+                   encryption="disable"
+                   install-location="auto"/>
+</widget>

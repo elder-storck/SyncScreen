@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test config.js</title></head>
+<body>
+<script src="js/config.js"></script>
+<script>
+function assert(cond, msg) {
+    const p = document.createElement('p');
+    p.style.color = cond ? 'green' : 'red';
+    p.textContent = (cond ? 'PASS' : 'FAIL') + ': ' + msg;
+    document.body.appendChild(p);
+}
+
+localStorage.clear();
+
+assert(Config.mode === 'slideshow',       'mode default is slideshow');
+assert(Config.slideInterval === 5,        'slideInterval default is 5');
+assert(Config.remoteImages.length === 0,  'remoteImages default is empty array');
+assert(Config.webviewUrl === '',          'webviewUrl default is empty string');
+assert(Config.tvId === '',                'tvId default is empty string');
+
+Config.apply({
+    mode: 'webview',
+    webviewUrl: 'http://example.com',
+    slideInterval: 10,
+    images: [{ filename: 'a.jpg' }, { filename: 'b.jpg' }]
+});
+assert(Config.mode === 'webview',                  'mode after apply');
+assert(Config.webviewUrl === 'http://example.com', 'webviewUrl after apply');
+assert(Config.slideInterval === 10,                'slideInterval after apply');
+assert(Config.remoteImages[0] === 'a.jpg',         'remoteImages[0] after apply');
+assert(Config.remoteImages[1] === 'b.jpg',         'remoteImages[1] after apply');
+assert(Config.remoteImages.length === 2,           'remoteImages length after apply');
+
+Config.tvId = 'test-id-123';
+assert(Config.tvId === 'test-id-123', 'tvId set/get roundtrip');
+
+localStorage.clear();
+document.body.appendChild(Object.assign(document.createElement('hr')));
+document.body.appendChild(Object.assign(document.createElement('p'), { textContent: 'Done.' }));
+</script>
+</body></html>
