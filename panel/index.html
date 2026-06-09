@@ -348,9 +348,9 @@ function loadCastTVs() {
   const streaming = document.getElementById('btn-start-cast').hidden;
   container.innerHTML = allTVs.map(tv => `
     <div class="form-check">
-      <input class="form-check-input" type="checkbox" id="cast-${tv.id}" value="${tv.id}"
+      <input class="form-check-input" type="checkbox" id="cast-${esc(tv.id)}" value="${esc(tv.id)}"
              ${!tv.online || streaming ? 'disabled' : ''}>
-      <label class="form-check-label small" for="cast-${tv.id}">
+      <label class="form-check-label small" for="cast-${esc(tv.id)}">
         <span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
         ${esc(tv.name)}
         <span class="text-muted">(${esc(tv.ip_address || 'IP desconhecido')})</span>
@@ -361,9 +361,11 @@ function loadCastTVs() {
 }
 
 async function startCast() {
+  document.getElementById('btn-start-cast').disabled = true;
   const checked = [...document.querySelectorAll('#cast-tv-list input:checked')];
   if (!checked.length) {
     flashMsg('cast-msg', 'warning', 'Selecione ao menos uma TV online.');
+    document.getElementById('btn-start-cast').disabled = false;
     return;
   }
   const tvIds = checked.map(el => el.value);
@@ -371,7 +373,8 @@ async function startCast() {
   try {
     castStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
   } catch {
-    return; // usuário cancelou ou negou permissão
+    document.getElementById('btn-start-cast').disabled = false;
+    return;
   }
 
   castWs = new WebSocket(`ws://${location.host}/signal`);
@@ -401,8 +404,19 @@ function handleSignalMsg(msg) {
 }
 
 async function createOffer(tvId) {
+  if (!castStream) return;
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   peerConns.set(tvId, pc);
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      pc.close();
+      peerConns.delete(tvId);
+      const count = peerConns.size;
+      document.getElementById('cast-status').textContent =
+        count ? `${count} TV(s) conectada(s)` : 'Aguardando TVs...';
+    }
+  };
 
   castStream.getTracks().forEach(track => pc.addTrack(track, castStream));
 
@@ -414,15 +428,22 @@ async function createOffer(tvId) {
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  castWs.send(JSON.stringify({ type: 'offer', tvId, sdp: pc.localDescription }));
+  if (castWs?.readyState === WebSocket.OPEN) {
+    castWs.send(JSON.stringify({ type: 'offer', tvId, sdp: pc.localDescription }));
+  }
 }
 
 function stopCast() {
-  castStream?.getTracks().forEach(t => t.stop());
-  castWs?.close();
+  if (!castStream && !castWs) return;
+  if (castStream) {
+    castStream.getTracks().forEach(t => { t.onended = null; t.stop(); });
+  }
+  if (castWs) castWs.close();
 }
 
 function onCastEnd() {
+  if (!castWs && !castStream) return;
+  if (castWs) castWs.onmessage = null;
   castStream = null;
   castWs    = null;
   peerConns.forEach(pc => pc.close());
