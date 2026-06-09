@@ -48,10 +48,13 @@ const App = (() => {
             tizen.systeminfo.getPropertyValue(
                 'BUILD',
                 info => {
-                    const id = (info && info.serialNumber) ? info.serialNumber : '';
+                    const id   = (info && info.serialNumber) ? info.serialNumber : '';
+                    let name = '';
+                    try { name = webapis.network.getHostName(); } catch (_) {}
+                    if (!name) name = (info && info.model) ? info.model : '';
                     if (id) {
                         Config.tvId = id;
-                        callback(id);
+                        callback(id, name);
                     } else {
                         useFallbackId(callback);
                     }
@@ -65,7 +68,7 @@ const App = (() => {
 
     function useFallbackId(callback) {
         if (!Config.tvId) Config.tvId = generateUUID();
-        callback(Config.tvId);
+        callback(Config.tvId, '');
     }
 
     function getLocalIp() {
@@ -87,14 +90,19 @@ const App = (() => {
     }
 
     function start() {
-        getTvId(tvId => {
-            const tvName = (typeof tizen !== 'undefined') ? 'Samsung Tizen TV' : navigator.userAgent.slice(0, 40);
+        if (syncIntervalId) {
+            clearInterval(syncIntervalId);
+            syncIntervalId = null;
+        }
+        currentMode = '';
+
+        getTvId((tvId, tvModel) => {
+            const tvName = tvModel || ((typeof tizen !== 'undefined') ? 'Samsung Tizen TV' : navigator.userAgent.slice(0, 40));
 
             getLocalIp().then(ip => {
                 Api.register(tvId, tvName, ip).then(config => {
                     if (config) Config.apply(config);
                     showMode(Config.mode);
-                    // Sync immediately after register (mirrors Android's initial doSync)
                     doSync();
                     syncIntervalId = setInterval(doSync, 15000);
                 });
@@ -106,3 +114,10 @@ const App = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.start());
+document.addEventListener('appcontrol', () => App.start());
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) App.start();
+});
+
+window.addEventListener('focus', () => App.start());

@@ -18,7 +18,7 @@ android {
         versionName = "1.0"
 
         // ⚠️ ALTERE para o IP do servidor na sua rede local antes de compilar
-        buildConfigField("String", "SERVER_URL", "\"http://192.168.13.128:3000\"")
+        buildConfigField("String", "SERVER_URL", "\"http://192.168.13.128:3001\"")
     }
 
     buildFeatures {

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Elder/Documents/APP-TV/**)",
+      "Bash(docker compose *)"
+    ]
+  }
+}

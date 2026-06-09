@@ -10,6 +10,8 @@
     <feature name="http://tizen.org/feature/network.internet"/>
     <tizen:privilege name="http://tizen.org/privilege/internet"/>
     <tizen:privilege name="http://tizen.org/privilege/system"/>
+    <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+    <tizen:category name="http://tizen.org/category/tv.screen"/>
     <tizen:application id="syncscr001.SyncScreen"
                        package="syncscr001"
                        required_version="2.3"/>

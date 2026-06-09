@@ -1,4 +1,4 @@
-const SERVER_URL = 'http://192.168.13.128:3000'; // editar antes de empacotar
+const SERVER_URL = 'http://192.168.13.128:3001'; // editar antes de empacotar
 
 const Config = (() => {
     const LS = localStorage;
