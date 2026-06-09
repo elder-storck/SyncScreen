@@ -6,6 +6,7 @@ const path = require('path');
 const tvRoutes     = require('./routes/tvs');
 const configRoutes = require('./routes/config');
 const imageRoutes  = require('./routes/images');
+const signal       = require('./signal');
 
 const app    = express();
 const server = http.createServer(app);
@@ -19,6 +20,8 @@ wss.on('connection', (ws) => {
   ws.on('close', () => panelClients.delete(ws));
   ws.on('error', () => panelClients.delete(ws));
 });
+
+signal.attach(server, app);
 
 // Função compartilhada com as rotas para notificar o painel
 function broadcast(event) {

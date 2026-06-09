@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const signal = require('../signal');
 
 // TV registra-se e recebe sua configuração atual
 router.post('/register', (req, res) => {
@@ -70,13 +71,19 @@ function buildConfig(tvId) {
     ORDER BY order_index ASC, id ASC
   `).all();
 
-  return {
+  const config = {
     mode:           tvCfg?.mode           ?? global.mode,
     webview_url:    tvCfg?.webview_url    ?? global.webview_url,
     slide_interval: tvCfg?.slide_interval ?? parseInt(global.slide_interval, 10),
     updated_at:     tvCfg?.updated_at     ?? 0,
     images,
   };
+
+  if (signal.getScreencastTVs().has(tvId)) {
+    config.mode = 'screencast';
+  }
+
+  return config;
 }
 
 function getGlobal() {
