@@ -13,7 +13,14 @@ function getScreencastTVs() {
 }
 
 function attach(server, app) {
-  const wss = new WebSocket.Server({ server, path: '/signal' });
+  const wss = new WebSocket.Server({ noServer: true });
+
+  // Registra no upgrade handler do servidor — /ws é tratado em server.js
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url, 'http://x').pathname;
+    if (pathname !== '/signal') return;
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  });
 
   wss.on('connection', (ws) => {
     ws.on('error', (err) => {

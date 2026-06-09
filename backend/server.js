@@ -11,14 +11,22 @@ const signal       = require('./signal');
 const app    = express();
 const server = http.createServer(app);
 
-// WebSocket usado pelo painel para receber atualizações em tempo real
-const wss = new WebSocket.Server({ server, path: '/ws' });
+// WebSocket do painel — usa noServer para coexistir com /signal no mesmo servidor
+const wss = new WebSocket.Server({ noServer: true });
 const panelClients = new Set();
 
 wss.on('connection', (ws) => {
   panelClients.add(ws);
   ws.on('close', () => panelClients.delete(ws));
   ws.on('error', () => panelClients.delete(ws));
+});
+
+// Roteamento único de upgrade: /ws → painel, /signal → signal.js
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url, 'http://x').pathname;
+  if (pathname === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  }
 });
 
 signal.attach(server, app);
