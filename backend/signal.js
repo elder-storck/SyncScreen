@@ -5,9 +5,6 @@ let broadcaster = null;
 const tvClients    = new Map(); // tvId → WebSocket
 const screencastTVs  = new Set(); // tvIds atualmente em screencast
 
-const stmtTvConfig   = db.prepare(`SELECT mode FROM tv_config WHERE tv_id = ?`);
-const stmtGlobalMode = db.prepare(`SELECT value FROM global_config WHERE key = 'mode'`);
-
 function getScreencastTVs() {
   return screencastTVs;
 }
@@ -78,6 +75,8 @@ function handleBroadcasterHello(ws, msg, app) {
   for (const tvId of (msg.tvIds || [])) {
     screencastTVs.add(tvId);
   }
+
+  app.locals.broadcast({ type: 'config_updated' });
 }
 
 function handleTvHello(ws, msg) {

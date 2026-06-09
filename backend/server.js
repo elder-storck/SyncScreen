@@ -21,11 +21,13 @@ wss.on('connection', (ws) => {
   ws.on('error', () => panelClients.delete(ws));
 });
 
-// Roteamento único de upgrade: /ws → painel, /signal → signal.js
+// Roteamento único de upgrade: /ws → painel, /signal → signal.js, resto → destroy
 server.on('upgrade', (request, socket, head) => {
   const pathname = new URL(request.url, 'http://x').pathname;
   if (pathname === '/ws') {
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  } else if (pathname !== '/signal') {
+    socket.destroy();
   }
 });
 
