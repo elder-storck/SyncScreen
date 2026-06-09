@@ -97,6 +97,28 @@
       </div>
     </div>
   </div>
+
+  <!-- Screencast -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header py-2">
+      <h6 class="mb-0 fw-semibold">📡 Transmissão de Tela</h6>
+    </div>
+    <div class="card-body">
+      <div id="cast-tv-list" class="mb-3">
+        <p class="text-muted small mb-0">Carregando TVs...</p>
+      </div>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button id="btn-start-cast" class="btn btn-primary btn-sm" onclick="startCast()">
+          Iniciar Transmissão
+        </button>
+        <button id="btn-stop-cast" class="btn btn-danger btn-sm" onclick="stopCast()" hidden>
+          Encerrar Transmissão
+        </button>
+        <span id="cast-status" class="text-muted small"></span>
+      </div>
+      <div id="cast-msg" class="mt-2"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: config por TV -->
@@ -138,6 +160,7 @@
 <script>
 let tvModal;
 let globalCfg = {};
+let allTVs = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   tvModal = new bootstrap.Modal(document.getElementById('tvModal'));
@@ -168,29 +191,30 @@ function connectWS() {
 
 async function loadTVs() {
   const tvs = await api('/api/tvs') ?? [];
+  allTVs = tvs;
   const el = document.getElementById('tv-list');
   document.getElementById('refresh-time').textContent = 'Atualizado ' + new Date().toLocaleTimeString('pt-BR');
 
   if (!tvs.length) {
     el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada. Inicie o app em uma TV.</p>';
-    return;
-  }
-
-  el.innerHTML = tvs.map(tv => `
-    <div class="tv-card card mb-2 ${tv.online ? 'online' : 'offline'}">
-      <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
-        <span><span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
-          <small class="fw-semibold text-${tv.online ? 'success' : 'danger'}">${tv.online ? 'Online' : 'Offline'}</small>
-        </span>
-        <div class="flex-grow-1 overflow-hidden">
-          <div class="fw-semibold text-truncate">${esc(tv.name)}</div>
-          <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
+  } else {
+    el.innerHTML = tvs.map(tv => `
+      <div class="tv-card card mb-2 ${tv.online ? 'online' : 'offline'}">
+        <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
+          <span><span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
+            <small class="fw-semibold text-${tv.online ? 'success' : 'danger'}">${tv.online ? 'Online' : 'Offline'}</small>
+          </span>
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="fw-semibold text-truncate">${esc(tv.name)}</div>
+            <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
+          </div>
+          <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
+          <button class="btn btn-sm btn-outline-danger"  onclick="deleteTV('${tv.id}')">✕</button>
         </div>
-        <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
-        <button class="btn btn-sm btn-outline-danger"  onclick="deleteTV('${tv.id}')">✕</button>
       </div>
-    </div>
-  `).join('');
+    `).join('');
+  }
+  loadCastTVs();
 }
 
 async function deleteTV(id) {
@@ -307,6 +331,106 @@ async function uploadFiles(files) {
     `${ok} imagem(ns) enviada(s)${fail ? ` · ${fail} com erro` : ''}.`);
   document.getElementById('file-input').value = '';
   loadImages();
+}
+
+// ─── Screencast ─────────────────────────────────────────────────────────────
+
+let castStream = null;
+let castWs     = null;
+const peerConns = new Map(); // tvId → RTCPeerConnection
+
+function loadCastTVs() {
+  const container = document.getElementById('cast-tv-list');
+  if (!allTVs.length) {
+    container.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada.</p>';
+    return;
+  }
+  const streaming = document.getElementById('btn-start-cast').hidden;
+  container.innerHTML = allTVs.map(tv => `
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="cast-${tv.id}" value="${tv.id}"
+             ${!tv.online || streaming ? 'disabled' : ''}>
+      <label class="form-check-label small" for="cast-${tv.id}">
+        <span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
+        ${esc(tv.name)}
+        <span class="text-muted">(${esc(tv.ip_address || 'IP desconhecido')})</span>
+        ${!tv.online ? '<span class="badge bg-secondary ms-1">offline</span>' : ''}
+      </label>
+    </div>
+  `).join('');
+}
+
+async function startCast() {
+  const checked = [...document.querySelectorAll('#cast-tv-list input:checked')];
+  if (!checked.length) {
+    flashMsg('cast-msg', 'warning', 'Selecione ao menos uma TV online.');
+    return;
+  }
+  const tvIds = checked.map(el => el.value);
+
+  try {
+    castStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  } catch {
+    return; // usuário cancelou ou negou permissão
+  }
+
+  castWs = new WebSocket(`ws://${location.host}/signal`);
+  castWs.onopen = () => {
+    castWs.send(JSON.stringify({ type: 'broadcaster-hello', tvIds }));
+  };
+  castWs.onmessage = ({ data }) => handleSignalMsg(JSON.parse(data));
+  castWs.onclose = () => onCastEnd();
+
+  castStream.getVideoTracks()[0].onended = () => stopCast();
+
+  document.getElementById('btn-start-cast').hidden = true;
+  document.getElementById('btn-stop-cast').hidden  = false;
+  document.getElementById('cast-status').textContent = 'Aguardando TVs...';
+  document.querySelectorAll('#cast-tv-list input').forEach(el => el.disabled = true);
+}
+
+function handleSignalMsg(msg) {
+  if (msg.type === 'tv-ready') {
+    createOffer(msg.tvId);
+    document.getElementById('cast-status').textContent = `${peerConns.size} TV(s) conectada(s)`;
+  } else if (msg.type === 'answer') {
+    peerConns.get(msg.tvId)?.setRemoteDescription(msg.sdp).catch(() => {});
+  } else if (msg.type === 'ice') {
+    peerConns.get(msg.tvId)?.addIceCandidate(msg.candidate).catch(() => {});
+  }
+}
+
+async function createOffer(tvId) {
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  peerConns.set(tvId, pc);
+
+  castStream.getTracks().forEach(track => pc.addTrack(track, castStream));
+
+  pc.onicecandidate = ({ candidate }) => {
+    if (candidate && castWs?.readyState === WebSocket.OPEN) {
+      castWs.send(JSON.stringify({ type: 'ice', tvId, candidate }));
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  castWs.send(JSON.stringify({ type: 'offer', tvId, sdp: pc.localDescription }));
+}
+
+function stopCast() {
+  castStream?.getTracks().forEach(t => t.stop());
+  castWs?.close();
+}
+
+function onCastEnd() {
+  castStream = null;
+  castWs    = null;
+  peerConns.forEach(pc => pc.close());
+  peerConns.clear();
+  document.getElementById('btn-start-cast').hidden = false;
+  document.getElementById('btn-stop-cast').hidden  = true;
+  document.getElementById('cast-status').textContent = '';
+  loadCastTVs();
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
