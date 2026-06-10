@@ -14,12 +14,17 @@
     <div id="webview-view" class="view hidden">
         <iframe id="kiosk-frame" src="about:blank" allowfullscreen></iframe>
     </div>
+    <div id="screencast-view" class="view hidden">
+        <video id="cast-video" autoplay playsinline
+               style="width:100%;height:100%;object-fit:cover;background:#000"></video>
+    </div>
 
     <script src="js/config.js"></script>
     <script src="js/api.js"></script>
     <script src="js/cache.js"></script>
     <script src="js/slideshow.js"></script>
     <script src="js/webview.js"></script>
+    <script src="js/screencast.js"></script>
     <script src="js/main.js"></script>
 </body>
 </html>

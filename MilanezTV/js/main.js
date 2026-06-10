@@ -1,21 +1,30 @@
 const App = (() => {
-    const slideshowView = document.getElementById('slideshow-view');
-    const webviewView   = document.getElementById('webview-view');
+    const slideshowView  = document.getElementById('slideshow-view');
+    const webviewView    = document.getElementById('webview-view');
+    const screencastView = document.getElementById('screencast-view');
 
     let currentMode    = '';
     let syncIntervalId = null;
+    let startPending   = false;
 
     function showMode(mode) {
         if (mode === currentMode) return;
+
+        if (currentMode === 'screencast') Screencast.stop();
+
         currentMode = mode;
 
-        if (mode === 'webview') {
-            slideshowView.classList.add('hidden');
+        slideshowView.classList.add('hidden');
+        webviewView.classList.add('hidden');
+        screencastView.classList.add('hidden');
+
+        if (mode === 'screencast') {
+            screencastView.classList.remove('hidden');
+            Screencast.enter();
+        } else if (mode === 'webview') {
             webviewView.classList.remove('hidden');
-            Slideshow.stop();
             Webview.enter();
         } else {
-            webviewView.classList.add('hidden');
             slideshowView.classList.remove('hidden');
             Slideshow.enter();
         }
@@ -30,9 +39,10 @@ const App = (() => {
                 showMode(config.mode);
             } else if (config.mode === 'webview') {
                 Webview.syncUrl(config);
-            } else {
+            } else if (config.mode === 'slideshow') {
                 Slideshow.syncImages(config);
             }
+            // screencast: o stream WebRTC gerencia a exibição
         });
     }
 
@@ -48,13 +58,10 @@ const App = (() => {
             tizen.systeminfo.getPropertyValue(
                 'BUILD',
                 info => {
-                    const id   = (info && info.serialNumber) ? info.serialNumber : '';
-                    let name = '';
-                    try { name = webapis.network.getHostName(); } catch (_) {}
-                    if (!name) name = (info && info.model) ? info.model : '';
+                    const id = (info && info.serialNumber) ? info.serialNumber : '';
                     if (id) {
                         Config.tvId = id;
-                        callback(id, name);
+                        callback(id, '');
                     } else {
                         useFallbackId(callback);
                     }
@@ -67,11 +74,34 @@ const App = (() => {
     }
 
     function useFallbackId(callback) {
-        if (!Config.tvId) Config.tvId = generateUUID();
-        callback(Config.tvId, '');
+        let duid = '';
+        try { duid = webapis.productinfo.getDuid(); } catch (_) {}
+        const id = duid || Config.tvId || generateUUID();
+        Config.tvId = id;
+        callback(id, '');
     }
 
     function getLocalIp() {
+        if (typeof webapis !== 'undefined' && webapis.network) {
+            try {
+                const ip = webapis.network.getIPAddress();
+                if (ip) return Promise.resolve(ip);
+            } catch (_) {}
+        }
+        if (typeof tizen !== 'undefined') {
+            return new Promise(resolve => {
+                let done = false;
+                const finish = ip => { if (!done) { done = true; resolve(ip || ''); } };
+                setTimeout(() => finish(''), 3000);
+                tizen.systeminfo.getPropertyValue('WIFI_NETWORK',
+                    info => finish(info && info.ipAddress ? info.ipAddress : ''),
+                    () => tizen.systeminfo.getPropertyValue('ETHERNET_NETWORK',
+                        info => finish(info && info.ipAddress ? info.ipAddress : ''),
+                        () => finish('')
+                    )
+                );
+            });
+        }
         try {
             const pc = new RTCPeerConnection({ iceServers: [] });
             pc.createDataChannel('');
@@ -90,6 +120,10 @@ const App = (() => {
     }
 
     function start() {
+        if (startPending) return;
+        startPending = true;
+        setTimeout(() => { startPending = false; }, 10000);
+
         if (syncIntervalId) {
             clearInterval(syncIntervalId);
             syncIntervalId = null;

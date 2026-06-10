@@ -346,10 +346,13 @@ function loadCastTVs() {
     return;
   }
   const streaming = document.getElementById('btn-start-cast').hidden;
+  // Preserva seleções existentes antes de re-renderizar
+  const selected = new Set([...document.querySelectorAll('#cast-tv-list input:checked')].map(el => el.value));
   container.innerHTML = allTVs.map(tv => `
     <div class="form-check">
       <input class="form-check-input" type="checkbox" id="cast-${esc(tv.id)}" value="${esc(tv.id)}"
-             ${!tv.online || streaming ? 'disabled' : ''}>
+             ${!tv.online || streaming ? 'disabled' : ''}
+             ${selected.has(tv.id) && tv.online ? 'checked' : ''}>
       <label class="form-check-label small" for="cast-${esc(tv.id)}">
         <span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
         ${esc(tv.name)}

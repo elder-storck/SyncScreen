@@ -3,15 +3,16 @@
         xmlns:tizen="http://tizen.org/ns/widgets"
         id="http://milanezmilaneze.com.br/syncscreen"
         version="1.0.0">
-    <name>SyncScreen</name>
-    <icon src="img/default.png"/>
+    <name>MilanezMilaneze</name>
+    <icon src="img/milanez_logo.jpg"/>
     <content src="index.html"/>
     <access origin="*" subdomains="true"/>
     <feature name="http://tizen.org/feature/network.internet"/>
     <tizen:privilege name="http://tizen.org/privilege/internet"/>
     <tizen:privilege name="http://tizen.org/privilege/system"/>
     <tizen:privilege name="http://tizen.org/privilege/network.get"/>
-    <tizen:category name="http://tizen.org/category/tv.screen"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
     <tizen:application id="syncscr001.SyncScreen"
                        package="syncscr001"
                        required_version="2.3"/>
