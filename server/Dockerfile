@@ -8,10 +8,10 @@ RUN apk add --no-cache openssl && \
 
 WORKDIR /app
 
-COPY backend/package*.json ./
+COPY server/package*.json ./
 RUN npm ci --omit=dev
 
-COPY backend/ .
+COPY server/ .
 
 COPY panel/ /panel/
 

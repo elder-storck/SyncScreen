@@ -2,7 +2,7 @@ services:
   syncscreen:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: server/Dockerfile
     ports:
       - "3001:3001"
       - "3002:3002"
@@ -10,6 +10,6 @@ services:
       - PORT=3001
       - PANEL_PORT=3002
     volumes:
-      - ./backend/data:/app/data
-      - ./backend/uploads:/app/uploads
+      - ./server/data:/app/data
+      - ./server/uploads:/app/uploads
     restart: unless-stopped
