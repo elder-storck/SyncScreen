@@ -1,0 +1,14 @@
+# Compiled widget
+*.wgt
+
+# Tool-generated
+docs/
+.superpowers/
+
+# Tizen Studio IDE
+.project
+.tproject
+.settings/
+
+# Build/signing
+.sign/

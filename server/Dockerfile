@@ -13,7 +13,7 @@ RUN npm ci --omit=dev
 
 COPY server/ .
 
-COPY panel/ /panel/
+COPY server/panel/ /panel/
 
 EXPOSE 3001
 EXPOSE 3002
