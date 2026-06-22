@@ -9,14 +9,17 @@ function getScreencastTVs() {
   return screencastTVs;
 }
 
-function attach(server, app) {
+function attach(servers, app) {
   const wss = new WebSocket.Server({ noServer: true });
 
-  // Registra no upgrade handler do servidor — /ws é tratado em server.js
-  server.on('upgrade', (request, socket, head) => {
-    const pathname = new URL(request.url, 'http://x').pathname;
-    if (pathname !== '/signal') return;
-    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  // Aceita array de servidores (HTTP + HTTPS) com estado de sinalização compartilhado
+  const serverList = Array.isArray(servers) ? servers : [servers];
+  serverList.forEach(server => {
+    server.on('upgrade', (request, socket, head) => {
+      const pathname = new URL(request.url, 'http://x').pathname;
+      if (pathname !== '/signal') return;
+      wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+    });
   });
 
   wss.on('connection', (ws) => {

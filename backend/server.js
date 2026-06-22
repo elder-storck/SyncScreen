@@ -1,5 +1,7 @@
 const express = require('express');
+const https = require('https');
 const http = require('http');
+const fs = require('fs');
 const WebSocket = require('ws');
 const path = require('path');
 
@@ -8,10 +10,19 @@ const configRoutes = require('./routes/config');
 const imageRoutes  = require('./routes/images');
 const signal       = require('./signal');
 
-const app    = express();
-const server = http.createServer(app);
+const app = express();
 
-// WebSocket do painel — usa noServer para coexistir com /signal no mesmo servidor
+// HTTP — TVs e acesso local (localhost é sempre contexto seguro)
+const httpServer = http.createServer(app);
+
+// HTTPS — painel acessado de outros PCs (getDisplayMedia exige contexto seguro)
+const tlsOptions = {
+  key:  fs.readFileSync('/app/certs/key.pem'),
+  cert: fs.readFileSync('/app/certs/cert.pem'),
+};
+const httpsServer = https.createServer(tlsOptions, app);
+
+// WebSocket do painel (/ws) — notificações em tempo real, em ambos os servidores
 const wss = new WebSocket.Server({ noServer: true });
 const panelClients = new Set();
 
@@ -21,19 +32,20 @@ wss.on('connection', (ws) => {
   ws.on('error', () => panelClients.delete(ws));
 });
 
-// Roteamento único de upgrade: /ws → painel, /signal → signal.js, resto → destroy
-server.on('upgrade', (request, socket, head) => {
-  const pathname = new URL(request.url, 'http://x').pathname;
-  if (pathname === '/ws') {
-    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
-  } else if (pathname !== '/signal') {
-    socket.destroy();
-  }
-});
+function attachPanelWs(server) {
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url, 'http://x').pathname;
+    if (pathname === '/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+    }
+  });
+}
+attachPanelWs(httpServer);
+attachPanelWs(httpsServer);
 
-signal.attach(server, app);
+// Sinalização WebRTC (/signal) — TVs via HTTP, painel via HTTPS, mesmo estado compartilhado
+signal.attach([httpServer, httpsServer], app);
 
-// Função compartilhada com as rotas para notificar o painel
 function broadcast(event) {
   const msg = JSON.stringify(event);
   panelClients.forEach(ws => {
@@ -44,35 +56,33 @@ function broadcast(event) {
 app.locals.broadcast = broadcast;
 
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    if (req.method === 'OPTIONS') return res.sendStatus(200);
-    next();
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
 });
 
 app.use(express.json());
-
-// Arquivos de imagens enviados pelo admin
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Painel administrativo (pasta ../panel relativa ao backend)
 app.use('/', express.static(path.join(__dirname, '../panel')));
-
-// Rotas da API
 app.use('/api/tvs',    tvRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/images', imageRoutes);
 
-// Tratamento de erro do multer (arquivo inválido, tamanho, etc.)
 app.use((err, req, res, next) => {
   if (err.message) return res.status(400).json({ error: err.message });
   next(err);
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`SyncScreen backend rodando em http://localhost:${PORT}`);
-  console.log(`Painel:    http://localhost:${PORT}`);
-  console.log(`API:       http://localhost:${PORT}/api`);
+const HTTP_PORT  = process.env.PORT       || 3001;
+const HTTPS_PORT = process.env.PANEL_PORT || 3002;
+
+httpServer.listen(HTTP_PORT, () => {
+  console.log(`HTTP  (TVs + local): http://localhost:${HTTP_PORT}`);
+});
+
+httpsServer.listen(HTTPS_PORT, () => {
+  console.log(`HTTPS (painel remoto): https://localhost:${HTTPS_PORT}`);
+  console.log(`⚠  Certificado autoassinado: aceite o aviso no navegador (só na primeira vez).`);
 });

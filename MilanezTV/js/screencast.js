@@ -8,7 +8,8 @@ const Screencast = (() => {
 
     function enter() {
         const serverHost = Config.serverUrl.replace(/^https?:\/\//, '');
-        ws = new WebSocket('ws://' + serverHost + '/signal');
+        const wsProto = Config.serverUrl.startsWith('https') ? 'wss:' : 'ws:';
+        ws = new WebSocket(wsProto + '//' + serverHost + '/signal');
 
         ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'tv-hello', tvId: Config.tvId }));

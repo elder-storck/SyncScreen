@@ -162,6 +162,17 @@ let tvModal;
 let globalCfg = {};
 let allTVs = [];
 
+const TV_NAME_MAP = {
+  'I2HRN53R2C62T': 'Financeiro',
+  'TDX4Z7PER3YGJ': 'Comunicação',
+  'K3TKNZZ5TXYQZ': 'Comercial',
+  'WMJOBRUD5SAZ3':  'Operacional',
+};
+
+function displayName(name) {
+  return TV_NAME_MAP[name] || name;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   tvModal = new bootstrap.Modal(document.getElementById('tvModal'));
   loadAll();
@@ -177,7 +188,8 @@ function loadAll() {
 
 // WebSocket para receber notificações do servidor em tempo real
 function connectWS() {
-  const ws = new WebSocket(`ws://${location.host}/ws`);
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${wsProto}//${location.host}/ws`);
   ws.onmessage = ({ data }) => {
     const msg = JSON.parse(data);
     if (msg.type === 'tv_updated' || msg.type === 'tv_removed') loadTVs();
@@ -198,14 +210,16 @@ async function loadTVs() {
   if (!tvs.length) {
     el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada. Inicie o app em uma TV.</p>';
   } else {
-    el.innerHTML = tvs.map(tv => `
+    const sorted = [...tvs].sort((a, b) =>
+      displayName(a.name).localeCompare(displayName(b.name), 'pt-BR'));
+    el.innerHTML = sorted.map(tv => `
       <div class="tv-card card mb-2 ${tv.online ? 'online' : 'offline'}">
         <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
           <span><span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
             <small class="fw-semibold text-${tv.online ? 'success' : 'danger'}">${tv.online ? 'Online' : 'Offline'}</small>
           </span>
           <div class="flex-grow-1 overflow-hidden">
-            <div class="fw-semibold text-truncate">${esc(tv.name)}</div>
+            <div class="fw-semibold text-truncate">${esc(displayName(tv.name))}</div>
             <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
           </div>
           <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
@@ -348,14 +362,16 @@ function loadCastTVs() {
   const streaming = document.getElementById('btn-start-cast').hidden;
   // Preserva seleções existentes antes de re-renderizar
   const selected = new Set([...document.querySelectorAll('#cast-tv-list input:checked')].map(el => el.value));
-  container.innerHTML = allTVs.map(tv => `
+  const sorted = [...allTVs].sort((a, b) =>
+    displayName(a.name).localeCompare(displayName(b.name), 'pt-BR'));
+  container.innerHTML = sorted.map(tv => `
     <div class="form-check">
       <input class="form-check-input" type="checkbox" id="cast-${esc(tv.id)}" value="${esc(tv.id)}"
              ${!tv.online || streaming ? 'disabled' : ''}
              ${selected.has(tv.id) && tv.online ? 'checked' : ''}>
       <label class="form-check-label small" for="cast-${esc(tv.id)}">
         <span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
-        ${esc(tv.name)}
+        ${esc(displayName(tv.name))}
         <span class="text-muted">(${esc(tv.ip_address || 'IP desconhecido')})</span>
         ${!tv.online ? '<span class="badge bg-secondary ms-1">offline</span>' : ''}
       </label>
@@ -380,7 +396,8 @@ async function startCast() {
     return;
   }
 
-  castWs = new WebSocket(`ws://${location.host}/signal`);
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  castWs = new WebSocket(`${wsProto}//${location.host}/signal`);
   castWs.onopen = () => {
     castWs.send(JSON.stringify({ type: 'broadcaster-hello', tvIds }));
   };
