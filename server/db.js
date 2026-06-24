@@ -2,6 +2,7 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
 
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -82,8 +83,7 @@ function listUsers() {
   return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
 }
 
-async function seedAdminUser() {
-  const bcrypt = require('bcryptjs');
+function seedAdminUser() {
   const count = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
   if (count > 0) return;
 
@@ -94,7 +94,7 @@ async function seedAdminUser() {
     console.warn('⚠  ADMIN_PASSWORD não definida — usando senha padrão "admin123". Troque em produção!');
   }
 
-  const hash = await bcrypt.hash(password, 10);
+  const hash = bcrypt.hashSync(password, 10);
   db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, hash, 'admin');
   console.log(`✔ Usuário admin criado: ${username}`);
 }
