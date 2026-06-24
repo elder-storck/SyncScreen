@@ -54,9 +54,8 @@ db.exec(`
 const cols = db.prepare(`PRAGMA table_info(users)`).all();
 if (!cols.some(c => c.name === 'role')) {
   db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`);
-  // Garante que o usuário admin configurado em env tenha role admin
-  const adminUsername = process.env.ADMIN_USER || 'admin';
-  db.prepare(`UPDATE users SET role = 'admin' WHERE username = ?`).run(adminUsername);
+  // Garante que o primeiro usuário (seeded admin) tenha role admin
+  db.prepare(`UPDATE users SET role = 'admin' WHERE id = (SELECT MIN(id) FROM users)`).run();
 }
 
 // Seed default global config on first run
@@ -87,11 +86,14 @@ function seedAdminUser() {
   const count = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
   if (count > 0) return;
 
-  const username = process.env.ADMIN_USER     || 'admin';
-  const password = process.env.ADMIN_PASSWORD || 'admin123';
-
-  if (!process.env.ADMIN_PASSWORD) {
-    console.warn('⚠  ADMIN_PASSWORD não definida — usando senha padrão "admin123". Troque em produção!');
+  const username = process.env.ADMIN_USER || 'admin';
+  let password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    const crypto = require('crypto');
+    password = crypto.randomBytes(16).toString('hex');
+    console.warn('⚠  ADMIN_PASSWORD não definida — senha gerada automaticamente:');
+    console.warn(`    ADMIN_PASSWORD=${password}`);
+    console.warn('    Salve esta senha agora. Ela não será exibida novamente.');
   }
 
   const hash = bcrypt.hashSync(password, 10);
