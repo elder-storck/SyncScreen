@@ -40,7 +40,23 @@ db.exec(`
     active        INTEGER NOT NULL DEFAULT 1,
     uploaded_at   INTEGER NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    UNIQUE NOT NULL,
+    password_hash TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT (datetime('now'))
+  );
 `);
+
+// Migração: adiciona coluna role se ainda não existir
+const cols = db.prepare(`PRAGMA table_info(users)`).all();
+if (!cols.some(c => c.name === 'role')) {
+  db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'`);
+  // Garante que o usuário admin configurado em env tenha role admin
+  const adminUsername = process.env.ADMIN_USER || 'admin';
+  db.prepare(`UPDATE users SET role = 'admin' WHERE username = ?`).run(adminUsername);
+}
 
 // Seed default global config on first run
 const seed = db.prepare(`INSERT OR IGNORE INTO global_config (key, value) VALUES (?, ?)`);
@@ -48,4 +64,39 @@ seed.run('mode', 'slideshow');
 seed.run('webview_url', '');
 seed.run('slide_interval', '5');
 
-module.exports = db;
+// ─── User helpers ────────────────────────────────────────────────────────────
+
+function getUserByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+}
+
+function createUser(username, passwordHash, role = 'user') {
+  return db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, passwordHash, role);
+}
+
+function deleteUser(id) {
+  return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
+function listUsers() {
+  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id ASC').all();
+}
+
+async function seedAdminUser() {
+  const bcrypt = require('bcryptjs');
+  const count = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
+  if (count > 0) return;
+
+  const username = process.env.ADMIN_USER     || 'admin';
+  const password = process.env.ADMIN_PASSWORD || 'admin123';
+
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn('⚠  ADMIN_PASSWORD não definida — usando senha padrão "admin123". Troque em produção!');
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, hash, 'admin');
+  console.log(`✔ Usuário admin criado: ${username}`);
+}
+
+module.exports = { db, getUserByUsername, createUser, deleteUser, listUsers, seedAdminUser };
