@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SyncScreen — Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+  <style>
+    body { background: #f0f2f5; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-4 py-2">
+  <span class="navbar-brand fw-bold fs-5">📺 SyncScreen <span class="badge bg-secondary ms-1 fs-6">Admin</span></span>
+  <div class="d-flex align-items-center gap-3">
+    <span class="text-secondary small" id="nav-user"></span>
+    <a href="/" class="btn btn-sm btn-outline-light">← Painel</a>
+    <button class="btn btn-sm btn-outline-secondary" onclick="logout()">Sair</button>
+  </div>
+</nav>
+
+<div class="container py-4" style="max-width:800px">
+  <div class="card shadow-sm">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">Usuários</h6>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadUsers()">↻ Atualizar</button>
+    </div>
+    <div class="card-body">
+      <div id="users-list" class="mb-3">
+        <p class="text-muted small mb-0">Carregando...</p>
+      </div>
+      <hr class="my-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-3">
+          <label class="form-label small fw-semibold mb-1">Usuário</label>
+          <input class="form-control form-control-sm" id="new-username" type="text" placeholder="nome">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label small fw-semibold mb-1">Senha</label>
+          <input class="form-control form-control-sm" id="new-password" type="password" placeholder="senha">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label small fw-semibold mb-1">Tipo</label>
+          <select class="form-select form-select-sm" id="new-role">
+            <option value="user">Usuário</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <button class="btn btn-sm btn-primary w-100" onclick="createUser()">Criar</button>
+        </div>
+      </div>
+      <div id="users-msg" class="mt-2"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const me = await api('/api/auth/me');
+  if (!me) return;
+  document.getElementById('nav-user').textContent = me.username;
+  loadUsers();
+});
+
+async function loadUsers() {
+  const users = await api('/api/users') ?? [];
+  const el = document.getElementById('users-list');
+  if (!users.length) {
+    el.innerHTML = '<p class="text-muted small mb-0">Nenhum usuário cadastrado.</p>';
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'table table-sm table-hover mb-0';
+  table.innerHTML = '<thead><tr><th class="small">Usuário</th><th class="small">Tipo</th><th class="small">Criado em</th><th></th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  for (const u of users) {
+    const tr = document.createElement('tr');
+
+    const tdName = document.createElement('td');
+    tdName.className = 'small align-middle';
+    tdName.textContent = u.username;
+
+    const tdRole = document.createElement('td');
+    tdRole.className = 'small align-middle';
+    const badge = document.createElement('span');
+    badge.className = u.role === 'admin' ? 'badge bg-danger' : 'badge bg-secondary';
+    badge.textContent = u.role === 'admin' ? 'Admin' : 'Usuário';
+    tdRole.appendChild(badge);
+
+    const tdDate = document.createElement('td');
+    tdDate.className = 'small align-middle text-muted';
+    tdDate.textContent = u.created_at;
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'text-end';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-danger py-0 px-2';
+    btn.textContent = '✕';
+    btn.onclick = () => removeUser(u.id, u.username);
+    tdAction.appendChild(btn);
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdRole);
+    tr.appendChild(tdDate);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  el.innerHTML = '';
+  el.appendChild(table);
+}
+
+async function createUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const role     = document.getElementById('new-role').value;
+  if (!username || !password) {
+    flashMsg('users-msg', 'warning', 'Preencha usuário e senha.');
+    return;
+  }
+  const res = await fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, role }),
+  });
+  if (res.status === 401) { location.href = '/login'; return; }
+  if (res.status === 403) { location.href = '/'; return; }
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    flashMsg('users-msg', 'success', `Usuário "${esc(username)}" criado.`);
+    loadUsers();
+  } else {
+    flashMsg('users-msg', 'danger', data.error || 'Erro ao criar usuário.');
+  }
+}
+
+async function removeUser(id, username) {
+  if (!confirm(`Remover usuário "${username}"?`)) return;
+  const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  if (res.status === 401) { location.href = '/login'; return; }
+  if (res.status === 403) { location.href = '/'; return; }
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    flashMsg('users-msg', 'success', `Usuário "${esc(username)}" removido.`);
+    loadUsers();
+  } else {
+    flashMsg('users-msg', 'danger', data.error || 'Erro ao remover.');
+  }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login';
+}
+
+async function api(url, opts = {}) {
+  try {
+    const options = { method: opts.method || 'GET', headers: {} };
+    if (opts.json) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(opts.json);
+    }
+    const res = await fetch(url, options);
+    if (res.status === 401) { location.href = '/login'; return null; }
+    if (res.status === 403) { location.href = '/'; return null; }
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function flashMsg(elId, type, msg) {
+  const el = document.getElementById(elId);
+  el.innerHTML = `<div class="alert alert-${type} py-1 small">${msg}</div>`;
+  setTimeout(() => el.innerHTML = '', 4000);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+  );
+}
+</script>
+
+</body>
+</html>
