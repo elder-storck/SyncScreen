@@ -4,3 +4,4 @@ server/uploads/
 *.db
 *.db-shm
 *.db-wal
+.env

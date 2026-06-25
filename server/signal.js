@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const db = require('./db');
+const { db } = require('./db');
 
 let broadcaster = null;
 const tvClients    = new Map(); // tvId → WebSocket
