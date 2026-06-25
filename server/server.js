@@ -70,8 +70,8 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(cookieParser());
 
-// Arquivos estáticos (uploads de imagens)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/assets', express.static(path.join(__dirname, 'panel/assets')));
 
 // Auth middleware para todas as rotas /api exceto as públicas das TVs e login
 app.use('/api', (req, res, next) => {
