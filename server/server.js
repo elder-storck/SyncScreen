@@ -4,10 +4,14 @@ const http = require('http');
 const fs = require('fs');
 const WebSocket = require('ws');
 const path = require('path');
+const cookieParser = require('cookie-parser');
 
 const tvRoutes     = require('./routes/tvs');
 const configRoutes = require('./routes/config');
 const imageRoutes  = require('./routes/images');
+const { authRouter, usersRouter } = require('./routes/auth');
+const { requireAuth, requireAuthPage, requireAdminPage } = require('./auth');
+const { seedAdminUser } = require('./db');
 const signal       = require('./signal');
 
 const app = express();
@@ -58,17 +62,53 @@ app.locals.broadcast = broadcast;
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
 app.use(express.json());
+app.use(cookieParser());
+
+// Arquivos estáticos (uploads de imagens)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/', express.static(path.join(__dirname, '../panel')));
+
+// Auth middleware para todas as rotas /api exceto as públicas das TVs e login
+app.use('/api', (req, res, next) => {
+  const pub = [
+    ['POST', '/auth/login'],
+    ['POST', '/auth/logout'],
+    ['POST', '/tvs/register'],
+    ['POST', '/tvs/heartbeat'],
+  ];
+  const isPublic = pub.some(([m, p]) => req.method === m && req.path === p);
+  if (isPublic) return next();
+  requireAuth(req, res, next);
+});
+
+// Rotas públicas de auth (login/logout/me)
+app.use('/api/auth', authRouter);
+
+// Rotas protegidas (o middleware /api acima já verificou o token)
 app.use('/api/tvs',    tvRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/images', imageRoutes);
+app.use('/api/users',  usersRouter);
+
+// Páginas do painel
+const panelDir = path.join(__dirname, '../panel');
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(panelDir, 'login.html'));
+});
+
+app.get('/admin', requireAdminPage, (req, res) => {
+  res.sendFile(path.join(panelDir, 'admin.html'));
+});
+
+app.get('/', requireAuthPage, (req, res) => {
+  res.sendFile(path.join(panelDir, 'index.html'));
+});
 
 app.use((err, req, res, next) => {
   if (err.message) return res.status(400).json({ error: err.message });
@@ -86,3 +126,5 @@ httpsServer.listen(HTTPS_PORT, () => {
   console.log(`HTTPS (painel remoto): https://localhost:${HTTPS_PORT}`);
   console.log(`⚠  Certificado autoassinado: aceite o aviso no navegador (só na primeira vez).`);
 });
+
+seedAdminUser().catch(err => console.error('Erro ao criar usuário admin:', err));
