@@ -1,14 +1,17 @@
 services:
   syncscreen:
     build:
-      context: .
-      dockerfile: server/Dockerfile
+      context: ./server
+      dockerfile: Dockerfile
     ports:
       - "3001:3001"
       - "3002:3002"
     environment:
       - PORT=3001
       - PANEL_PORT=3002
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
     volumes:
       - ./server/data:/app/data
       - ./server/uploads:/app/uploads

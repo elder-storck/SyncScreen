@@ -8,12 +8,10 @@ RUN apk add --no-cache openssl && \
 
 WORKDIR /app
 
-COPY server/package*.json ./
+COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY server/ .
-
-COPY server/panel/ /panel/
+COPY . .
 
 EXPOSE 3001
 EXPOSE 3002

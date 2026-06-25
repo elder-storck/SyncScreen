@@ -96,7 +96,7 @@ app.use('/api/images', imageRoutes);
 app.use('/api/users',  usersRouter);
 
 // Páginas do painel
-const panelDir = path.join(__dirname, '../panel');
+const panelDir = path.join(__dirname, 'panel');
 
 app.get('/login', (req, res) => {
   res.sendFile(path.join(panelDir, 'login.html'));
