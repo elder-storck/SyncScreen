@@ -127,4 +127,4 @@ httpsServer.listen(HTTPS_PORT, () => {
   console.log(`⚠  Certificado autoassinado: aceite o aviso no navegador (só na primeira vez).`);
 });
 
-seedAdminUser().catch(err => console.error('Erro ao criar usuário admin:', err));
+try { seedAdminUser(); } catch (err) { console.error('Erro ao criar usuário admin:', err); }
