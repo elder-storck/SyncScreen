@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SyncScreen — Painel</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <style>
     body { background: #f0f2f5; }
     .tv-card { border-left: 5px solid #6c757d; transition: border-color .3s; }
@@ -28,7 +28,12 @@
 
 <nav class="navbar navbar-dark bg-dark px-4 py-2">
   <span class="navbar-brand fw-bold fs-5">📺 SyncScreen</span>
-  <span class="text-secondary small" id="refresh-time"></span>
+  <div class="d-flex align-items-center gap-3">
+    <span class="text-secondary small" id="refresh-time"></span>
+    <span class="text-secondary small" id="nav-user"></span>
+    <a id="btn-admin" href="/admin" class="btn btn-sm btn-outline-warning" hidden>⚙ Admin</a>
+    <button class="btn btn-sm btn-outline-secondary" onclick="logout()">Sair</button>
+  </div>
 </nav>
 
 <div class="container py-4" style="max-width:1100px">
@@ -156,7 +161,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 <script>
 let tvModal;
 let globalCfg = {};
@@ -169,11 +174,19 @@ const TV_NAME_MAP = {
   'WMJOBRUD5SAZ3':  'Operacional',
 };
 
-function displayName(name) {
-  return TV_NAME_MAP[name] || name;
+function displayName(tv) {
+  return TV_NAME_MAP[tv.id] || tv.name;
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const me = await api('/api/auth/me');
+  if (!me) return;
+
+  document.getElementById('nav-user').textContent = me.username;
+  if (me.role === 'admin') {
+    document.getElementById('btn-admin').hidden = false;
+  }
+
   tvModal = new bootstrap.Modal(document.getElementById('tvModal'));
   loadAll();
   connectWS();
@@ -211,7 +224,7 @@ async function loadTVs() {
     el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada. Inicie o app em uma TV.</p>';
   } else {
     const sorted = [...tvs].sort((a, b) =>
-      displayName(a.name).localeCompare(displayName(b.name), 'pt-BR'));
+      displayName(a).localeCompare(displayName(b), 'pt-BR'));
     el.innerHTML = sorted.map(tv => `
       <div class="tv-card card mb-2 ${tv.online ? 'online' : 'offline'}">
         <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
@@ -219,7 +232,7 @@ async function loadTVs() {
             <small class="fw-semibold text-${tv.online ? 'success' : 'danger'}">${tv.online ? 'Online' : 'Offline'}</small>
           </span>
           <div class="flex-grow-1 overflow-hidden">
-            <div class="fw-semibold text-truncate">${esc(displayName(tv.name))}</div>
+            <div class="fw-semibold text-truncate">${esc(displayName(tv))}</div>
             <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
           </div>
           <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
@@ -363,7 +376,7 @@ function loadCastTVs() {
   // Preserva seleções existentes antes de re-renderizar
   const selected = new Set([...document.querySelectorAll('#cast-tv-list input:checked')].map(el => el.value));
   const sorted = [...allTVs].sort((a, b) =>
-    displayName(a.name).localeCompare(displayName(b.name), 'pt-BR'));
+    displayName(a).localeCompare(displayName(b), 'pt-BR'));
   container.innerHTML = sorted.map(tv => `
     <div class="form-check">
       <input class="form-check-input" type="checkbox" id="cast-${esc(tv.id)}" value="${esc(tv.id)}"
@@ -371,7 +384,7 @@ function loadCastTVs() {
              ${selected.has(tv.id) && tv.online ? 'checked' : ''}>
       <label class="form-check-label small" for="cast-${esc(tv.id)}">
         <span class="dot ${tv.online ? 'dot-on' : 'dot-off'}"></span>
-        ${esc(displayName(tv.name))}
+        ${esc(displayName(tv))}
         <span class="text-muted">(${esc(tv.ip_address || 'IP desconhecido')})</span>
         ${!tv.online ? '<span class="badge bg-secondary ms-1">offline</span>' : ''}
       </label>
@@ -484,9 +497,15 @@ async function api(url, opts = {}) {
       options.body = JSON.stringify(opts.json);
     }
     const res = await fetch(url, options);
+    if (res.status === 401) { location.href = '/login'; return null; }
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.href = '/login';
 }
 
 function flashMsg(elId, type, msg) {
