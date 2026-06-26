@@ -58,6 +58,37 @@ if (!cols.some(c => c.name === 'role')) {
   db.prepare(`UPDATE users SET role = 'admin' WHERE id = (SELECT MIN(id) FROM users)`).run();
 }
 
+// Novas tabelas
+db.exec(`
+  CREATE TABLE IF NOT EXISTS image_groups (
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS tv_aliases (
+    tv_id        TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL DEFAULT ''
+  );
+`);
+
+// Seed dos 3 grupos (idempotente)
+const seedGroup = db.prepare(`INSERT OR IGNORE INTO image_groups (id, name) VALUES (?, ?)`);
+seedGroup.run(1, 'Grupo 1');
+seedGroup.run(2, 'Grupo 2');
+seedGroup.run(3, 'Grupo 3');
+
+// Migração: group_id em images
+const imgCols = db.prepare(`PRAGMA table_info(images)`).all();
+if (!imgCols.some(c => c.name === 'group_id')) {
+  db.exec(`ALTER TABLE images ADD COLUMN group_id INTEGER NOT NULL DEFAULT 1`);
+}
+
+// Migração: image_group em tv_config
+const tvCfgCols = db.prepare(`PRAGMA table_info(tv_config)`).all();
+if (!tvCfgCols.some(c => c.name === 'image_group')) {
+  db.exec(`ALTER TABLE tv_config ADD COLUMN image_group INTEGER NOT NULL DEFAULT 1`);
+}
+
 // Seed default global config on first run
 const seed = db.prepare(`INSERT OR IGNORE INTO global_config (key, value) VALUES (?, ?)`);
 seed.run('mode', 'slideshow');

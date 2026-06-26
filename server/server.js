@@ -20,9 +20,10 @@ const app = express();
 const httpServer = http.createServer(app);
 
 // HTTPS — painel acessado de outros PCs (getDisplayMedia exige contexto seguro)
+const certsDir = process.env.CERTS_DIR || path.join(__dirname, 'certs');
 const tlsOptions = {
-  key:  fs.readFileSync('/app/certs/key.pem'),
-  cert: fs.readFileSync('/app/certs/cert.pem'),
+  key:  fs.readFileSync(path.join(certsDir, 'key.pem')),
+  cert: fs.readFileSync(path.join(certsDir, 'cert.pem')),
 };
 const httpsServer = https.createServer(tlsOptions, app);
 
