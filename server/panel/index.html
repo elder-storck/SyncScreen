@@ -19,10 +19,9 @@
     .img-item img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; border: 2px solid #dee2e6; }
     .img-item .del { position: absolute; top: 4px; right: 4px; padding: 0 6px; line-height: 20px; font-size: 12px; }
     .img-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #6c757d; }
-    #dropzone { border: 2px dashed #adb5bd; border-radius: 8px; padding: 36px 20px; text-align: center; cursor: pointer; transition: all .2s; }
-    #dropzone:hover, #dropzone.drag-over { border-color: #0d6efd; background: #f0f4ff; }
     .badge-url { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
-    #url-row { display: none; }
+    .group-name-input { border: none; background: transparent; font-weight: 600; font-size: .9rem; width: auto; min-width: 60px; max-width: 180px; padding: 0; }
+    .group-name-input:focus { outline: 1px solid #0d6efd; border-radius: 3px; background: #fff; }
   </style>
 </head>
 <body>
@@ -50,57 +49,14 @@
     </div>
   </div>
 
-  <!-- Config Global -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-header py-2">
-      <h6 class="mb-0 fw-semibold">Configuração Global</h6>
-    </div>
-    <div class="card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-sm-3">
-          <label class="form-label small fw-semibold mb-1">Modo de exibição</label>
-          <select class="form-select form-select-sm" id="g-mode" onchange="toggleUrlRow()">
-            <option value="slideshow">🖼 Slideshow</option>
-            <option value="webview">🌐 Site (WebView)</option>
-          </select>
-        </div>
-        <div class="col-sm-5" id="url-row">
-          <label class="form-label small fw-semibold mb-1">URL do site</label>
-          <input class="form-control form-control-sm" id="g-url" type="url" placeholder="https://exemplo.com.br">
-        </div>
-        <div class="col-sm-2">
-          <label class="form-label small fw-semibold mb-1">Intervalo slides (s)</label>
-          <input class="form-control form-control-sm" id="g-interval" type="number" min="1" max="3600" value="5">
-        </div>
-        <div class="col-sm-2">
-          <button class="btn btn-primary btn-sm w-100" onclick="saveGlobal()">Aplicar a todas</button>
-        </div>
-      </div>
-      <div id="global-msg" class="mt-2"></div>
-    </div>
-  </div>
-
   <!-- Imagens -->
   <div class="card shadow-sm mb-4">
     <div class="card-header py-2">
       <h6 class="mb-0 fw-semibold">Imagens do Slideshow</h6>
     </div>
-    <div class="card-body">
-      <div id="dropzone"
-           onclick="document.getElementById('file-input').click()"
-           ondragover="onDragOver(event)"
-           ondragleave="onDragLeave(event)"
-           ondrop="onDrop(event)">
-        <div class="fs-4 mb-1">⬆️</div>
-        <div>Clique ou arraste imagens aqui</div>
-        <small class="text-muted">JPG, PNG, GIF, WEBP · máx. 20 MB por imagem</small>
-        <input type="file" id="file-input" multiple accept="image/*" class="d-none" onchange="uploadFiles(this.files)">
-      </div>
-      <div id="upload-msg" class="mt-2"></div>
-      <hr class="my-3">
-      <div id="img-grid" class="img-grid">
-        <p class="text-muted small">Nenhuma imagem cadastrada.</p>
-      </div>
+    <div class="card-body p-0">
+      <ul class="nav nav-tabs px-3 pt-2" id="group-tabs" role="tablist"></ul>
+      <div class="tab-content p-3" id="group-tab-content"></div>
     </div>
   </div>
 
@@ -139,12 +95,14 @@
         <input type="hidden" id="modal-tv-id">
         <div class="mb-3">
           <label class="form-label small fw-semibold">Modo</label>
-          <select class="form-select form-select-sm" id="m-mode">
-            <option value="slideshow">🖼 Slideshow</option>
+          <select class="form-select form-select-sm" id="m-mode" onchange="onModalModeChange()">
             <option value="webview">🌐 Site (WebView)</option>
+            <option value="slideshow_1">🖼 Grupo 1</option>
+            <option value="slideshow_2">🖼 Grupo 2</option>
+            <option value="slideshow_3">🖼 Grupo 3</option>
           </select>
         </div>
-        <div class="mb-3">
+        <div class="mb-3" id="m-url-row" style="display:none">
           <label class="form-label small fw-semibold">URL do site</label>
           <input class="form-control form-control-sm" id="m-url" type="url" placeholder="https://...">
         </div>
@@ -152,10 +110,8 @@
           <label class="form-label small fw-semibold">Intervalo slides (s)</label>
           <input class="form-control form-control-sm" id="m-interval" type="number" min="1" max="3600">
         </div>
-        <p class="text-muted small mb-0">Campos em branco usam a configuração global.</p>
       </div>
       <div class="modal-footer py-2">
-        <button class="btn btn-sm btn-outline-secondary" onclick="resetTV()">Usar config. global</button>
         <button class="btn btn-sm btn-primary" onclick="saveTV()">Salvar</button>
       </div>
     </div>
@@ -165,18 +121,12 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 <script>
 let tvModal;
-let globalCfg = {};
 let allTVs = [];
-
-const TV_NAME_MAP = {
-  'I2HRN53R2C62T': 'Financeiro',
-  'TDX4Z7PER3YGJ': 'Comunicação',
-  'K3TKNZZ5TXYQZ': 'Comercial',
-  'WMJOBRUD5SAZ3':  'Operacional',
-};
+let tvAliasMap = {};   // tv_id → display_name
+let imageGroups = [];
 
 function displayName(tv) {
-  return TV_NAME_MAP[tv.id] || tv.name;
+  return tvAliasMap[tv.id] || tv.name;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -195,9 +145,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function loadAll() {
+  loadAliases();
   loadTVs();
-  loadGlobal();
   loadImages();
+}
+
+async function loadAliases() {
+  const aliases = await api('/api/tv-aliases') ?? [];
+  tvAliasMap = Object.fromEntries(aliases.map(a => [a.tv_id, a.display_name]));
 }
 
 // WebSocket para receber notificações do servidor em tempo real
@@ -208,7 +163,7 @@ function connectWS() {
     const msg = JSON.parse(data);
     if (msg.type === 'tv_updated' || msg.type === 'tv_removed') loadTVs();
     if (msg.type === 'images_updated') loadImages();
-    if (msg.type === 'config_updated') { loadGlobal(); loadTVs(); }
+    if (msg.type === 'config_updated') loadTVs();
   };
   ws.onclose = () => setTimeout(connectWS, 3000);
 }
@@ -234,7 +189,7 @@ async function loadTVs() {
           </span>
           <div class="flex-grow-1 overflow-hidden">
             <div class="fw-semibold text-truncate">${esc(displayName(tv))}</div>
-            <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)}</small>
+            <small class="text-muted">${esc(tv.ip_address || 'IP desconhecido')} · ${ago(tv.last_seen)} · ${tv.effective_mode === 'webview' ? '🌐 Site' : '🖼 Slideshow'}</small>
           </div>
           <button class="btn btn-sm btn-outline-primary" onclick="openTV('${tv.id}','${esc(tv.name)}')">⚙ Config.</button>
           <button class="btn btn-sm btn-outline-danger"  onclick="deleteTV('${tv.id}')">✕</button>
@@ -251,50 +206,53 @@ async function deleteTV(id) {
   loadTVs();
 }
 
-// ─── Configuração global ────────────────────────────────────────────────────
-
-async function loadGlobal() {
-  globalCfg = await api('/api/config') ?? {};
-  document.getElementById('g-mode').value = globalCfg.mode || 'slideshow';
-  document.getElementById('g-url').value  = globalCfg.webview_url || '';
-  document.getElementById('g-interval').value = globalCfg.slide_interval || 5;
-  toggleUrlRow();
-}
-
-function toggleUrlRow() {
-  const mode = document.getElementById('g-mode').value;
-  document.getElementById('url-row').style.display = mode === 'webview' ? '' : 'none';
-}
-
-async function saveGlobal() {
-  const body = {
-    mode:           document.getElementById('g-mode').value,
-    webview_url:    document.getElementById('g-url').value,
-    slide_interval: parseInt(document.getElementById('g-interval').value) || 5,
-  };
-  const ok = await api('/api/config', { method: 'PUT', json: body });
-  flashMsg('global-msg', ok ? 'success' : 'danger', ok ? '✔ Config. salva com sucesso!' : 'Erro ao salvar.');
-}
-
 // ─── Config por TV (modal) ──────────────────────────────────────────────────
+
+function onModalModeChange() {
+  const val = document.getElementById('m-mode').value;
+  document.getElementById('m-url-row').style.display = val === 'webview' ? '' : 'none';
+}
 
 async function openTV(id, name) {
   document.getElementById('modal-tv-id').value = id;
   document.getElementById('modal-tv-name').textContent = name;
 
-  const cfg = await api(`/api/config/${id}`) ?? globalCfg;
-  document.getElementById('m-mode').value     = cfg.mode || 'slideshow';
-  document.getElementById('m-url').value      = cfg.webview_url || '';
-  document.getElementById('m-interval').value = cfg.slide_interval || globalCfg.slide_interval || 5;
+  // Atualiza nomes dos grupos no select
+  const groups = await api('/api/image-groups') ?? [];
+  const select = document.getElementById('m-mode');
+  groups.forEach(g => {
+    const opt = select.querySelector(`option[value="slideshow_${g.id}"]`);
+    if (opt) opt.textContent = `🖼 ${g.name}`;
+  });
+
+  const cfg = await api(`/api/config/${id}`);
+  let modeVal = 'slideshow_1';
+  if (cfg) {
+    if (cfg.mode === 'webview') {
+      modeVal = 'webview';
+    } else {
+      modeVal = `slideshow_${cfg.image_group ?? 1}`;
+    }
+    document.getElementById('m-url').value      = cfg.webview_url || '';
+    document.getElementById('m-interval').value = cfg.slide_interval || 5;
+  }
+  select.value = modeVal;
+  onModalModeChange();
   tvModal.show();
 }
 
 async function saveTV() {
-  const id = document.getElementById('modal-tv-id').value;
+  const id  = document.getElementById('modal-tv-id').value;
+  const val = document.getElementById('m-mode').value;
+
+  const mode        = val === 'webview' ? 'webview' : 'slideshow';
+  const image_group = val === 'webview' ? 1 : parseInt(val.replace('slideshow_', ''), 10);
+
   await api(`/api/config/${id}`, {
     method: 'PUT',
     json: {
-      mode:           document.getElementById('m-mode').value,
+      mode,
+      image_group,
       webview_url:    document.getElementById('m-url').value,
       slide_interval: parseInt(document.getElementById('m-interval').value) || 5,
     },
@@ -303,31 +261,80 @@ async function saveTV() {
   loadTVs();
 }
 
-async function resetTV() {
-  const id = document.getElementById('modal-tv-id').value;
-  await api(`/api/config/${id}`, { method: 'DELETE' });
-  tvModal.hide();
-  loadTVs();
-}
-
 // ─── Imagens ────────────────────────────────────────────────────────────────
 
 async function loadImages() {
-  const images = await api('/api/images') ?? [];
-  const grid = document.getElementById('img-grid');
+  imageGroups = await api('/api/image-groups') ?? [];
+  const images  = await api('/api/images') ?? [];
 
-  if (!images.length) {
-    grid.innerHTML = '<p class="text-muted small">Nenhuma imagem. Faça upload acima.</p>';
-    return;
+  const tabsEl    = document.getElementById('group-tabs');
+  const contentEl = document.getElementById('group-tab-content');
+
+  tabsEl.innerHTML    = '';
+  contentEl.innerHTML = '';
+
+  imageGroups.forEach((group, i) => {
+    const isActive = i === 0;
+    const groupImgs = images.filter(img => img.group_id === group.id);
+
+    // Tab pill
+    const li = document.createElement('li');
+    li.className = 'nav-item';
+    li.innerHTML = `
+      <button class="nav-link${isActive ? ' active' : ''}" id="tab-g${group.id}"
+              data-bs-toggle="tab" data-bs-target="#pane-g${group.id}" type="button">
+        <input class="group-name-input" id="gname-${group.id}" value="${esc(group.name)}"
+               title="Clique para renomear"
+               onblur="renameGroup(${group.id})"
+               onkeydown="if(event.key==='Enter'){this.blur()}">
+      </button>`;
+    tabsEl.appendChild(li);
+
+    // Pane
+    const pane = document.createElement('div');
+    pane.className = `tab-pane fade${isActive ? ' show active' : ''}`;
+    pane.id = `pane-g${group.id}`;
+    pane.innerHTML = `
+      <div id="dropzone-${group.id}"
+           onclick="document.getElementById('file-input-${group.id}').click()"
+           ondragover="onDragOver(event,${group.id})"
+           ondragleave="onDragLeave(${group.id})"
+           ondrop="onDrop(event,${group.id})"
+           style="border:2px dashed #adb5bd;border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s">
+        <div class="fs-5 mb-1">⬆️</div>
+        <div class="small">Clique ou arraste imagens aqui</div>
+        <small class="text-muted">JPG, PNG, GIF, WEBP · máx. 20 MB</small>
+        <input type="file" id="file-input-${group.id}" multiple accept="image/*" class="d-none"
+               onchange="uploadFiles(this.files,${group.id})">
+      </div>
+      <div id="upload-msg-${group.id}" class="mt-2"></div>
+      <hr class="my-3">
+      <div id="img-grid-${group.id}" class="img-grid">
+        ${groupImgs.length
+          ? groupImgs.map(img => `
+            <div class="img-item" data-id="${img.id}">
+              <img src="/uploads/${esc(img.filename)}" alt="${esc(img.original_name)}" loading="lazy">
+              <button class="btn btn-danger del" onclick="deleteImg(${img.id})">✕</button>
+              <small title="${esc(img.original_name)}">${esc(img.original_name)}</small>
+            </div>`).join('')
+          : '<p class="text-muted small">Nenhuma imagem neste grupo.</p>'
+        }
+      </div>`;
+    contentEl.appendChild(pane);
+  });
+}
+
+async function renameGroup(groupId) {
+  const input = document.getElementById(`gname-${groupId}`);
+  const name  = input.value.trim();
+  if (!name) { input.value = imageGroups.find(g => g.id === groupId)?.name || ''; return; }
+  const ok = await api(`/api/image-groups/${groupId}`, { method: 'PUT', json: { name } });
+  if (ok) {
+    const g = imageGroups.find(g => g.id === groupId);
+    if (g) g.name = name;
+  } else {
+    input.value = imageGroups.find(g => g.id === groupId)?.name || '';
   }
-
-  grid.innerHTML = images.map(img => `
-    <div class="img-item" data-id="${img.id}">
-      <img src="/uploads/${img.filename}" alt="${esc(img.original_name)}" loading="lazy">
-      <button class="btn btn-danger del" onclick="deleteImg(${img.id})">✕</button>
-      <small title="${esc(img.original_name)}">${esc(img.original_name)}</small>
-    </div>
-  `).join('');
 }
 
 async function deleteImg(id) {
@@ -338,26 +345,42 @@ async function deleteImg(id) {
 
 // ─── Upload ─────────────────────────────────────────────────────────────────
 
-function onDragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('drag-over'); }
-function onDragLeave()  { document.getElementById('dropzone').classList.remove('drag-over'); }
-function onDrop(e) { e.preventDefault(); onDragLeave(); uploadFiles(e.dataTransfer.files); }
+function onDragOver(e, groupId) {
+  e.preventDefault();
+  document.getElementById(`dropzone-${groupId}`).style.borderColor = '#0d6efd';
+  document.getElementById(`dropzone-${groupId}`).style.background  = '#f0f4ff';
+}
+function onDragLeave(groupId) {
+  document.getElementById(`dropzone-${groupId}`).style.borderColor = '#adb5bd';
+  document.getElementById(`dropzone-${groupId}`).style.background  = '';
+}
+function onDrop(e, groupId) {
+  e.preventDefault();
+  onDragLeave(groupId);
+  uploadFiles(e.dataTransfer.files, groupId);
+}
 
-async function uploadFiles(files) {
+async function uploadFiles(files, groupId) {
   if (!files?.length) return;
-  const msgEl = document.getElementById('upload-msg');
+  const msgEl = document.getElementById(`upload-msg-${groupId}`);
   msgEl.innerHTML = '<div class="alert alert-info py-1 small">Enviando...</div>';
 
   let ok = 0, fail = 0;
   for (const file of Array.from(files)) {
     const fd = new FormData();
     fd.append('image', file);
+    fd.append('group_id', groupId);
     const res = await fetch('/api/images', { method: 'POST', body: fd });
     if (res.ok) ok++; else fail++;
   }
 
-  flashMsg('upload-msg', fail ? 'warning' : 'success',
-    `${ok} imagem(ns) enviada(s)${fail ? ` · ${fail} com erro` : ''}.`);
-  document.getElementById('file-input').value = '';
+  const msgType = fail ? 'warning' : 'success';
+  const msgText = `${ok} imagem(ns) enviada(s)${fail ? ` · ${fail} com erro` : ''}.`;
+  msgEl.innerHTML = `<div class="alert alert-${msgType} py-1 small">${msgText}</div>`;
+  setTimeout(() => msgEl.innerHTML = '', 4000);
+
+  const input = document.getElementById(`file-input-${groupId}`);
+  if (input) input.value = '';
   loadImages();
 }
 
