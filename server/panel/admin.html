@@ -21,39 +21,72 @@
   </div>
 </nav>
 
-<div class="container py-4" style="max-width:800px">
-  <div class="card shadow-sm">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center">
-      <h6 class="mb-0 fw-semibold">Usuários</h6>
-      <button class="btn btn-sm btn-outline-secondary" onclick="loadUsers()">↻ Atualizar</button>
-    </div>
-    <div class="card-body">
-      <div id="users-list" class="mb-3">
-        <p class="text-muted small mb-0">Carregando...</p>
+<div class="container py-4" style="max-width:900px">
+  <ul class="nav nav-tabs mb-3" id="admin-tabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#pane-users">Usuários</button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#pane-aliases" onclick="loadAliases()">Mapeamento de TVs</button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- Aba Usuários -->
+    <div class="tab-pane fade show active" id="pane-users">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0 fw-semibold">Usuários</h6>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadUsers()">↻ Atualizar</button>
+        </div>
+        <div class="card-body">
+          <div id="users-list" class="mb-3">
+            <p class="text-muted small mb-0">Carregando...</p>
+          </div>
+          <hr class="my-3">
+          <div class="row g-2 align-items-end">
+            <div class="col-sm-3">
+              <label class="form-label small fw-semibold mb-1">Usuário</label>
+              <input class="form-control form-control-sm" id="new-username" type="text" placeholder="nome">
+            </div>
+            <div class="col-sm-3">
+              <label class="form-label small fw-semibold mb-1">Senha</label>
+              <input class="form-control form-control-sm" id="new-password" type="password" placeholder="senha">
+            </div>
+            <div class="col-sm-3">
+              <label class="form-label small fw-semibold mb-1">Tipo</label>
+              <select class="form-select form-select-sm" id="new-role">
+                <option value="user">Usuário</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="col-sm-3">
+              <button class="btn btn-sm btn-primary w-100" onclick="createUser()">Criar</button>
+            </div>
+          </div>
+          <div id="users-msg" class="mt-2"></div>
+        </div>
       </div>
-      <hr class="my-3">
-      <div class="row g-2 align-items-end">
-        <div class="col-sm-3">
-          <label class="form-label small fw-semibold mb-1">Usuário</label>
-          <input class="form-control form-control-sm" id="new-username" type="text" placeholder="nome">
+    </div>
+
+    <!-- Aba Mapeamento de TVs -->
+    <div class="tab-pane fade" id="pane-aliases">
+      <div class="card shadow-sm">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0 fw-semibold">Mapeamento de TVs</h6>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadAliases()">↻ Atualizar</button>
         </div>
-        <div class="col-sm-3">
-          <label class="form-label small fw-semibold mb-1">Senha</label>
-          <input class="form-control form-control-sm" id="new-password" type="password" placeholder="senha">
-        </div>
-        <div class="col-sm-3">
-          <label class="form-label small fw-semibold mb-1">Tipo</label>
-          <select class="form-select form-select-sm" id="new-role">
-            <option value="user">Usuário</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <div class="col-sm-3">
-          <button class="btn btn-sm btn-primary w-100" onclick="createUser()">Criar</button>
+        <div class="card-body">
+          <p class="text-muted small mb-3">Defina um nome de exibição para cada TV. Sem alias, o nome original do dispositivo é usado.</p>
+          <div id="aliases-list">
+            <p class="text-muted small mb-0">Carregando...</p>
+          </div>
+          <div id="aliases-msg" class="mt-2"></div>
         </div>
       </div>
-      <div id="users-msg" class="mt-2"></div>
     </div>
+
   </div>
 </div>
 
@@ -187,6 +220,83 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
   );
+}
+
+async function loadAliases() {
+  const [tvs, aliases] = await Promise.all([
+    api('/api/tvs') ?? [],
+    api('/api/tv-aliases') ?? [],
+  ]);
+
+  const aliasMap = Object.fromEntries((aliases ?? []).map(a => [a.tv_id, a.display_name]));
+  const el = document.getElementById('aliases-list');
+
+  if (!tvs.length) {
+    el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada.</p>';
+    return;
+  }
+
+  const sorted = [...tvs].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const table = document.createElement('table');
+  table.className = 'table table-sm table-hover mb-0';
+  table.innerHTML = `<thead><tr>
+    <th class="small">ID da TV</th>
+    <th class="small">Nome Original</th>
+    <th class="small">Nome de Exibição</th>
+    <th></th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+
+  for (const tv of sorted) {
+    const tr = document.createElement('tr');
+    const currentAlias = aliasMap[tv.id] || '';
+
+    tr.innerHTML = `
+      <td class="small align-middle text-muted font-monospace">${esc(tv.id)}</td>
+      <td class="small align-middle">${esc(tv.name)}</td>
+      <td class="align-middle">
+        <input class="form-control form-control-sm" id="alias-${esc(tv.id)}"
+               type="text" value="${esc(currentAlias)}" placeholder="Nome de exibição...">
+      </td>
+      <td class="text-end align-middle" style="white-space:nowrap">
+        <button class="btn btn-sm btn-primary py-0 px-2 me-1" onclick="saveAlias('${esc(tv.id)}')">Salvar</button>
+        ${currentAlias
+          ? `<button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeAlias('${esc(tv.id)}')">Remover</button>`
+          : ''}
+      </td>`;
+    tbody.appendChild(tr);
+  }
+
+  table.appendChild(tbody);
+  el.innerHTML = '';
+  el.appendChild(table);
+}
+
+async function saveAlias(tvId) {
+  const display_name = document.getElementById(`alias-${tvId}`).value.trim();
+  if (!display_name) {
+    flashMsg('aliases-msg', 'warning', 'Digite um nome de exibição.');
+    return;
+  }
+  const ok = await api(`/api/tv-aliases/${tvId}`, { method: 'PUT', json: { display_name } });
+  if (ok) {
+    flashMsg('aliases-msg', 'success', 'Alias salvo.');
+    loadAliases();
+  } else {
+    flashMsg('aliases-msg', 'danger', 'Erro ao salvar alias.');
+  }
+}
+
+async function removeAlias(tvId) {
+  if (!confirm('Remover alias desta TV?')) return;
+  const ok = await api(`/api/tv-aliases/${tvId}`, { method: 'DELETE' });
+  if (ok) {
+    flashMsg('aliases-msg', 'success', 'Alias removido.');
+    loadAliases();
+  } else {
+    flashMsg('aliases-msg', 'danger', 'Erro ao remover alias.');
+  }
 }
 </script>
 
