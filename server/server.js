@@ -9,6 +9,8 @@ const cookieParser = require('cookie-parser');
 const tvRoutes     = require('./routes/tvs');
 const configRoutes = require('./routes/config');
 const imageRoutes  = require('./routes/images');
+const imageGroupRoutes = require('./routes/image-groups');
+const tvAliasRoutes    = require('./routes/tv-aliases');
 const { authRouter, usersRouter } = require('./routes/auth');
 const { requireAuth, requireAuthPage, requireAdminPage } = require('./auth');
 const { seedAdminUser } = require('./db');
@@ -94,6 +96,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/tvs',    tvRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/images', imageRoutes);
+app.use('/api/image-groups', imageGroupRoutes);
+app.use('/api/tv-aliases',   tvAliasRoutes);
 app.use('/api/users',  usersRouter);
 
 // Páginas do painel
