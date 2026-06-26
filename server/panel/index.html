@@ -484,7 +484,7 @@ async function startCast() {
 
   try {
     castStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { frameRate: { ideal: 30, max: 30 } },
       audio: false,
     });
   } catch {
@@ -542,19 +542,9 @@ async function createOffer(tvId) {
   const videoTrack = castStream.getVideoTracks()[0];
   const transceiver = pc.addTransceiver(videoTrack, { direction: 'sendonly', streams: [castStream] });
 
-  // Preferir H.264 Baseline: decodificação por hardware na TV, menor latência
-  if (RTCRtpSender.getCapabilities) {
-    const caps = RTCRtpSender.getCapabilities('video');
-    if (caps) {
-      const h264 = caps.codecs.filter(c =>
-        c.mimeType.toLowerCase() === 'video/h264' && c.sdpFmtpLine?.includes('profile-level-id=42')
-      );
-      const rest = caps.codecs.filter(c =>
-        !(c.mimeType.toLowerCase() === 'video/h264' && c.sdpFmtpLine?.includes('profile-level-id=42'))
-      );
-      if (h264.length) transceiver.setCodecPreferences([...h264, ...rest]);
-    }
-  }
+  // VP9 é o codec padrão do browser para screen sharing e lida melhor com
+  // slides/PDFs (screen content coding). Não forçamos preferência — deixamos
+  // o browser escolher.
 
   pc.onicecandidate = ({ candidate }) => {
     if (candidate && castWs?.readyState === WebSocket.OPEN) {
