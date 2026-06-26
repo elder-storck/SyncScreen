@@ -29,25 +29,31 @@ router.get('/:tvId', (req, res) => {
 // Define config específica para uma TV
 router.put('/:tvId', (req, res) => {
   const { tvId } = req.params;
-  const { mode, webview_url, slide_interval } = req.body;
+  const { mode, webview_url, slide_interval, image_group } = req.body;
 
   const global = Object.fromEntries(
     db.prepare(`SELECT key, value FROM global_config`).all().map(r => [r.key, r.value])
   );
 
+  const safeGroup = [1, 2, 3].includes(parseInt(image_group, 10))
+    ? parseInt(image_group, 10)
+    : 1;
+
   db.prepare(`
-    INSERT INTO tv_config (tv_id, mode, webview_url, slide_interval, updated_at)
-    VALUES (@tvId, @mode, @url, @interval, @now)
+    INSERT INTO tv_config (tv_id, mode, webview_url, slide_interval, image_group, updated_at)
+    VALUES (@tvId, @mode, @url, @interval, @group, @now)
     ON CONFLICT(tv_id) DO UPDATE SET
       mode           = excluded.mode,
       webview_url    = excluded.webview_url,
       slide_interval = excluded.slide_interval,
+      image_group    = excluded.image_group,
       updated_at     = excluded.updated_at
   `).run({
     tvId,
     mode:     mode     ?? global.mode,
     url:      webview_url   !== undefined ? webview_url   : global.webview_url,
     interval: slide_interval !== undefined ? slide_interval : parseInt(global.slide_interval, 10),
+    group:    safeGroup,
     now:      Date.now(),
   });
 
