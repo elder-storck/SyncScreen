@@ -126,7 +126,7 @@ let tvAliasMap = {};   // tv_id → display_name
 let imageGroups = [];
 
 function displayName(tv) {
-  return tvAliasMap[tv.id] || tv.name;
+  return tvAliasMap[tv.id] || tv.id;
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
