@@ -46,7 +46,13 @@ router.post('/heartbeat', (req, res) => {
 // Lista todas as TVs com status online/offline
 router.get('/', (req, res) => {
   const now = Date.now();
-  const tvs = db.prepare(`SELECT * FROM tvs ORDER BY last_seen DESC`).all()
+  const globalMode = db.prepare(`SELECT value FROM global_config WHERE key = 'mode'`).get()?.value || 'slideshow';
+  const tvs = db.prepare(`
+    SELECT t.*, COALESCE(tc.mode, ?) AS effective_mode
+    FROM tvs t
+    LEFT JOIN tv_config tc ON tc.tv_id = t.id
+    ORDER BY t.last_seen DESC
+  `).all(globalMode)
     .map(tv => ({ ...tv, online: (now - tv.last_seen) < 60_000 }));
   res.json(tvs);
 });
@@ -64,23 +70,29 @@ function buildConfig(tvId) {
   const tvCfg = db.prepare(`SELECT * FROM tv_config WHERE tv_id = ?`).get(tvId);
   const global = getGlobal();
 
-  const images = db.prepare(`
-    SELECT id, filename, order_index
-    FROM images
-    WHERE active = 1
-    ORDER BY order_index ASC, id ASC
-  `).all();
+  const mode = tvCfg?.mode ?? global.mode;
+  const imageGroup = tvCfg?.image_group ?? 1;
+
+  const images = mode === 'slideshow'
+    ? db.prepare(`
+        SELECT id, filename, order_index FROM images
+        WHERE active = 1 AND group_id = ?
+        ORDER BY order_index ASC, id ASC
+      `).all(imageGroup)
+    : [];
 
   const config = {
-    mode:           tvCfg?.mode           ?? global.mode,
+    mode,
     webview_url:    tvCfg?.webview_url    ?? global.webview_url,
     slide_interval: tvCfg?.slide_interval ?? parseInt(global.slide_interval, 10),
+    image_group:    imageGroup,
     updated_at:     tvCfg?.updated_at     ?? 0,
     images,
   };
 
   if (signal.getScreencastTVs().has(tvId)) {
     config.mode = 'screencast';
+    config.images = [];
   }
 
   return config;
