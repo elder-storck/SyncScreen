@@ -20,8 +20,10 @@
     .img-item .del { position: absolute; top: 4px; right: 4px; padding: 0 6px; line-height: 20px; font-size: 12px; }
     .img-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #6c757d; }
     .badge-url { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
-    .group-name-input { border: none; background: transparent; font-weight: 600; font-size: .9rem; width: auto; min-width: 60px; max-width: 180px; padding: 0; }
-    .group-name-input:focus { outline: 1px solid #0d6efd; border-radius: 3px; background: #fff; }
+    .group-name-text { font-weight: 600; font-size: .9rem; }
+    .group-name-input { border: 1px solid #0d6efd; border-radius: 3px; background: #fff; padding: 0 4px; font-weight: 600; font-size: .9rem; width: 120px; outline: none; }
+    .group-edit-btn { cursor: pointer; opacity: .4; font-size: .75rem; margin-left: 5px; transition: opacity .15s; vertical-align: middle; }
+    .group-edit-btn:hover { opacity: 1; }
   </style>
 </head>
 <body>
@@ -291,10 +293,7 @@ async function loadImages() {
     li.innerHTML = `
       <button class="nav-link${isActive ? ' active' : ''}" id="tab-g${group.id}"
               data-bs-toggle="tab" data-bs-target="#pane-g${group.id}" type="button">
-        <input class="group-name-input" id="gname-${group.id}" value="${esc(group.name)}"
-               title="Clique para renomear"
-               onblur="renameGroup(${group.id})"
-               onkeydown="if(event.key==='Enter'){this.blur()}">
+        <span id="gname-${group.id}" class="group-name-text">${esc(group.name)}</span><span class="group-edit-btn" onclick="event.stopPropagation();startRename(${group.id})" title="Renomear grupo">✏</span>
       </button>`;
     tabsEl.appendChild(li);
 
@@ -332,16 +331,56 @@ async function loadImages() {
   });
 }
 
-async function renameGroup(groupId) {
-  const input = document.getElementById(`gname-${groupId}`);
-  const name  = input.value.trim();
-  if (!name) { input.value = imageGroups.find(g => g.id === groupId)?.name || ''; return; }
+function startRename(groupId) {
+  const nameEl = document.getElementById(`gname-${groupId}`);
+  if (!nameEl || nameEl.tagName === 'INPUT') return;
+  const originalName = imageGroups.find(g => g.id === groupId)?.name || nameEl.textContent;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'group-name-input';
+  input.value = originalName;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  input.addEventListener('blur', () => {
+    if (done) return;
+    done = true;
+    renameGroup(groupId, input, originalName);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') {
+      done = true;
+      const span = document.createElement('span');
+      span.id = `gname-${groupId}`;
+      span.className = 'group-name-text';
+      span.textContent = originalName;
+      input.replaceWith(span);
+    }
+  });
+}
+
+async function renameGroup(groupId, inputEl, originalName) {
+  const name = inputEl.value.trim();
+  const makeSpan = (text) => {
+    const span = document.createElement('span');
+    span.id = `gname-${groupId}`;
+    span.className = 'group-name-text';
+    span.textContent = text;
+    return span;
+  };
+  if (!name) { inputEl.replaceWith(makeSpan(originalName)); return; }
+  inputEl.replaceWith(makeSpan(name));
   const ok = await api(`/api/image-groups/${groupId}`, { method: 'PUT', json: { name } });
   if (ok) {
     const g = imageGroups.find(g => g.id === groupId);
     if (g) g.name = name;
   } else {
-    input.value = imageGroups.find(g => g.id === groupId)?.name || '';
+    const span = document.getElementById(`gname-${groupId}`);
+    if (span) span.textContent = originalName;
   }
 }
 
