@@ -223,20 +223,19 @@ function esc(s) {
 }
 
 async function loadAliases() {
-  const [tvs, aliases] = await Promise.all([
-    api('/api/tvs') ?? [],
-    api('/api/tv-aliases') ?? [],
-  ]);
+  const [tvs, aliases] = await Promise.all([api('/api/tvs'), api('/api/tv-aliases')]);
+  const safeTvs    = tvs    ?? [];
+  const safeAliases = aliases ?? [];
 
-  const aliasMap = Object.fromEntries((aliases ?? []).map(a => [a.tv_id, a.display_name]));
+  const aliasMap = Object.fromEntries(safeAliases.map(a => [a.tv_id, a.display_name]));
   const el = document.getElementById('aliases-list');
 
-  if (!tvs.length) {
+  if (!safeTvs.length) {
     el.innerHTML = '<p class="text-muted small mb-0">Nenhuma TV registrada.</p>';
     return;
   }
 
-  const sorted = [...tvs].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const sorted = [...safeTvs].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   const table = document.createElement('table');
   table.className = 'table table-sm table-hover mb-0';
