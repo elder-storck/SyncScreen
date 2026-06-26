@@ -235,6 +235,9 @@ async function openTV(id, name) {
     }
     document.getElementById('m-url').value      = cfg.webview_url || '';
     document.getElementById('m-interval').value = cfg.slide_interval || 5;
+  } else {
+    document.getElementById('m-url').value      = '';
+    document.getElementById('m-interval').value = 5;
   }
   select.value = modeVal;
   onModalModeChange();
