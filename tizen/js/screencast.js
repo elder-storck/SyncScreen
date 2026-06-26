@@ -30,7 +30,7 @@ const Screencast = (() => {
         negotiating = true;
         if (pc) { pc.close(); pc = null; }
         try {
-            pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+            pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require' });
 
             pc.ontrack = (event) => {
                 videoEl.srcObject = event.streams[0];

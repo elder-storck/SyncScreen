@@ -483,7 +483,10 @@ async function startCast() {
   const tvIds = checked.map(el => el.value);
 
   try {
-    castStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    castStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30, max: 30 }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
   } catch {
     document.getElementById('btn-start-cast').disabled = false;
     return;
@@ -518,7 +521,11 @@ function handleSignalMsg(msg) {
 
 async function createOffer(tvId) {
   if (!castStream) return;
-  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
+  });
   peerConns.set(tvId, pc);
 
   pc.onconnectionstatechange = () => {
@@ -531,7 +538,23 @@ async function createOffer(tvId) {
     }
   };
 
-  castStream.getTracks().forEach(track => pc.addTrack(track, castStream));
+  // addTransceiver para controlar direção e preferência de codec
+  const videoTrack = castStream.getVideoTracks()[0];
+  const transceiver = pc.addTransceiver(videoTrack, { direction: 'sendonly', streams: [castStream] });
+
+  // Preferir H.264 Baseline: decodificação por hardware na TV, menor latência
+  if (RTCRtpSender.getCapabilities) {
+    const caps = RTCRtpSender.getCapabilities('video');
+    if (caps) {
+      const h264 = caps.codecs.filter(c =>
+        c.mimeType.toLowerCase() === 'video/h264' && c.sdpFmtpLine?.includes('profile-level-id=42')
+      );
+      const rest = caps.codecs.filter(c =>
+        !(c.mimeType.toLowerCase() === 'video/h264' && c.sdpFmtpLine?.includes('profile-level-id=42'))
+      );
+      if (h264.length) transceiver.setCodecPreferences([...h264, ...rest]);
+    }
+  }
 
   pc.onicecandidate = ({ candidate }) => {
     if (candidate && castWs?.readyState === WebSocket.OPEN) {
@@ -541,6 +564,15 @@ async function createOffer(tvId) {
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+
+  // Alta prioridade de rede para a stream de vídeo
+  const params = transceiver.sender.getParameters();
+  if (params.encodings?.length) {
+    params.encodings[0].priority = 'high';
+    params.encodings[0].networkPriority = 'high';
+    try { await transceiver.sender.setParameters(params); } catch (_) {}
+  }
+
   if (castWs?.readyState === WebSocket.OPEN) {
     castWs.send(JSON.stringify({ type: 'offer', tvId, sdp: pc.localDescription }));
   }
