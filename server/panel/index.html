@@ -270,6 +270,10 @@ async function loadImages() {
   imageGroups = await api('/api/image-groups') ?? [];
   const images  = await api('/api/images') ?? [];
 
+  // Preserve active tab across rebuild
+  const activePane = document.querySelector('#group-tab-content .tab-pane.active');
+  const activeGroupId = activePane ? parseInt(activePane.id.replace('pane-g', ''), 10) : null;
+
   const tabsEl    = document.getElementById('group-tabs');
   const contentEl = document.getElementById('group-tab-content');
 
@@ -277,7 +281,7 @@ async function loadImages() {
   contentEl.innerHTML = '';
 
   imageGroups.forEach((group, i) => {
-    const isActive = i === 0;
+    const isActive = activeGroupId ? group.id === activeGroupId : i === 0;
     const groupImgs = images.filter(img => img.group_id === group.id);
 
     // Tab pill
@@ -365,8 +369,10 @@ function onDrop(e, groupId) {
 
 async function uploadFiles(files, groupId) {
   if (!files?.length) return;
-  const msgEl = document.getElementById(`upload-msg-${groupId}`);
-  msgEl.innerHTML = '<div class="alert alert-info py-1 small">Enviando...</div>';
+
+  // Show "sending" on current (pre-rebuild) element
+  const sendingEl = document.getElementById(`upload-msg-${groupId}`);
+  if (sendingEl) sendingEl.innerHTML = '<div class="alert alert-info py-1 small">Enviando...</div>';
 
   let ok = 0, fail = 0;
   for (const file of Array.from(files)) {
@@ -379,12 +385,19 @@ async function uploadFiles(files, groupId) {
 
   const msgType = fail ? 'warning' : 'success';
   const msgText = `${ok} imagem(ns) enviada(s)${fail ? ` · ${fail} com erro` : ''}.`;
-  msgEl.innerHTML = `<div class="alert alert-${msgType} py-1 small">${msgText}</div>`;
-  setTimeout(() => msgEl.innerHTML = '', 4000);
+
+  // Rebuild DOM (this wipes the old upload-msg element)
+  await loadImages();
+
+  // Now look up the fresh element from the rebuilt DOM
+  const msgEl = document.getElementById(`upload-msg-${groupId}`);
+  if (msgEl) {
+    msgEl.innerHTML = `<div class="alert alert-${msgType} py-1 small">${msgText}</div>`;
+    setTimeout(() => { if (msgEl) msgEl.innerHTML = ''; }, 4000);
+  }
 
   const input = document.getElementById(`file-input-${groupId}`);
   if (input) input.value = '';
-  loadImages();
 }
 
 // ─── Screencast ─────────────────────────────────────────────────────────────
