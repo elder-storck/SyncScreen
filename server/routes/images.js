@@ -41,14 +41,17 @@ router.get('/', (req, res) => {
 router.post('/', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
+  const groupId = parseInt(req.body.group_id, 10);
+  const safeGroupId = [1, 2, 3].includes(groupId) ? groupId : 1;
+
   const { m } = db.prepare(
-    `SELECT COALESCE(MAX(order_index), -1) AS m FROM images WHERE active = 1`
-  ).get();
+    `SELECT COALESCE(MAX(order_index), -1) AS m FROM images WHERE active = 1 AND group_id = ?`
+  ).get(safeGroupId);
 
   const result = db.prepare(`
-    INSERT INTO images (filename, original_name, order_index, active, uploaded_at)
-    VALUES (?, ?, ?, 1, ?)
-  `).run(req.file.filename, req.file.originalname, m + 1, Date.now());
+    INSERT INTO images (filename, original_name, order_index, active, uploaded_at, group_id)
+    VALUES (?, ?, ?, 1, ?, ?)
+  `).run(req.file.filename, req.file.originalname, m + 1, Date.now(), safeGroupId);
 
   req.app.locals.broadcast({ type: 'images_updated' });
   res.json({ id: result.lastInsertRowid, filename: req.file.filename });
