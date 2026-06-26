@@ -144,8 +144,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setInterval(loadTVs, 10_000);
 });
 
-function loadAll() {
-  loadAliases();
+async function loadAll() {
+  await loadAliases();
   loadTVs();
   loadImages();
 }
@@ -164,6 +164,7 @@ function connectWS() {
     if (msg.type === 'tv_updated' || msg.type === 'tv_removed') loadTVs();
     if (msg.type === 'images_updated') loadImages();
     if (msg.type === 'config_updated') loadTVs();
+    if (msg.type === 'aliases_updated') loadAliases().then(() => loadTVs());
   };
   ws.onclose = () => setTimeout(connectWS, 3000);
 }

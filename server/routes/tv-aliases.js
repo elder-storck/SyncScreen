@@ -15,11 +15,13 @@ router.put('/:tvId', (req, res) => {
     INSERT INTO tv_aliases (tv_id, display_name) VALUES (?, ?)
     ON CONFLICT(tv_id) DO UPDATE SET display_name = excluded.display_name
   `).run(req.params.tvId, display_name.trim());
+  req.app.locals.broadcast({ type: 'aliases_updated' });
   res.json({ success: true });
 });
 
 router.delete('/:tvId', (req, res) => {
   db.prepare('DELETE FROM tv_aliases WHERE tv_id = ?').run(req.params.tvId);
+  req.app.locals.broadcast({ type: 'aliases_updated' });
   res.json({ success: true });
 });
 
