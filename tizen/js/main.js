@@ -168,12 +168,15 @@ document.addEventListener('keydown', (e) => {
     switch (e.keyCode) {
         case 13:  // OK / Enter
         case 179: // MediaPlayPause (botão ⏯ do controle Samsung)
+            e.preventDefault();
             Slideshow.togglePause();
             break;
         case 37: // ← seta esquerda
+            e.preventDefault();
             Slideshow.prevSlide();
             break;
         case 39: // → seta direita
+            e.preventDefault();
             Slideshow.nextSlide();
             break;
     }
