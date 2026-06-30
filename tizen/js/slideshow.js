@@ -3,10 +3,26 @@ const Slideshow = (() => {
         document.getElementById('slide-img-a'),
         document.getElementById('slide-img-b'),
     ];
-    let active     = 0; // índice da camada atualmente visível
+    const overlay = document.getElementById('slideshow-controls');
+    const playBtn = document.getElementById('ctrl-play');
+
+    let active     = 0;
     let filenames  = [];
     let index      = 0;
     let intervalId = null;
+    let paused     = false;
+    let hideTimer  = null;
+
+    function showControls() {
+        overlay.classList.add('visible');
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => overlay.classList.remove('visible'), 3000);
+    }
+
+    function updatePlayBtn() {
+        // ⏸ quando tocando, ▶ quando pausado
+        playBtn.textContent = paused ? '▶' : '⏸';
+    }
 
     function showFrame(filename) {
         Cache.get(filename).then(url => {
@@ -25,14 +41,12 @@ const Slideshow = (() => {
             next.onload  = swap;
             next.onerror = swap;
             next.src     = url || 'img/default.png';
-
-            // Imagem já estava em cache e carregou sincronamente
             if (next.complete) swap();
         });
     }
 
     function advance() {
-        if (filenames.length === 0) {
+        if (!filenames.length) {
             layers[active].src = 'img/default.png';
             return;
         }
@@ -43,14 +57,55 @@ const Slideshow = (() => {
     function startTimer(names, intervalSec) {
         filenames = names;
         index     = 0;
+        paused    = false;
         if (intervalId) clearInterval(intervalId);
         const ms = Math.max(1, intervalSec) * 1000;
         advance();
         intervalId = setInterval(advance, ms);
+        updatePlayBtn();
+    }
+
+    function pause() {
+        if (paused || !intervalId) return;
+        paused = true;
+        clearInterval(intervalId);
+        intervalId = null;
+        updatePlayBtn();
+        showControls();
+    }
+
+    function resume() {
+        if (!paused) return;
+        paused = false;
+        const ms = Math.max(1, Config.slideInterval) * 1000;
+        intervalId = setInterval(advance, ms);
+        updatePlayBtn();
+        showControls();
+    }
+
+    function togglePause() {
+        if (paused) resume(); else pause();
+    }
+
+    function prevSlide() {
+        if (!filenames.length) return;
+        // index aponta para o próximo a exibir; recuar 2 chega ao slide anterior
+        const n = filenames.length;
+        index = ((index - 2) % n + n) % n;
+        showFrame(filenames[index]);
+        index = (index + 1) % n;
+        showControls();
+    }
+
+    function nextSlide() {
+        if (!filenames.length) return;
+        advance();
+        showControls();
     }
 
     return {
         enter() {
+            paused = false;
             const names = Config.remoteImages;
             if (names.length === 0) { startTimer([], Config.slideInterval); return; }
 
@@ -94,6 +149,13 @@ const Slideshow = (() => {
 
         stop() {
             if (intervalId) { clearInterval(intervalId); intervalId = null; }
-        }
+            clearTimeout(hideTimer);
+            paused = false;
+            overlay.classList.remove('visible');
+        },
+
+        togglePause,
+        prevSlide,
+        nextSlide,
     };
 })();

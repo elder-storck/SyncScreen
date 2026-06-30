@@ -144,7 +144,7 @@ const App = (() => {
         });
     }
 
-    return { start };
+    return { start, getMode: () => currentMode };
 })();
 
 document.addEventListener('DOMContentLoaded', () => App.start());
@@ -155,3 +155,26 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('focus', () => App.start());
+
+// Controle remoto: ativa pause/navegação apenas no slideshow
+try {
+    if (typeof tizen !== 'undefined' && tizen.tvinputdevice) {
+        tizen.tvinputdevice.registerKey('MediaPlayPause');
+    }
+} catch (_) {}
+
+document.addEventListener('keydown', (e) => {
+    if (App.getMode() !== 'slideshow') return;
+    switch (e.keyCode) {
+        case 13:  // OK / Enter
+        case 179: // MediaPlayPause (botão ⏯ do controle Samsung)
+            Slideshow.togglePause();
+            break;
+        case 37: // ← seta esquerda
+            Slideshow.prevSlide();
+            break;
+        case 39: // → seta direita
+            Slideshow.nextSlide();
+            break;
+    }
+});
