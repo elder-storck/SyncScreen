@@ -42,7 +42,8 @@ router.post('/', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
   const groupId = parseInt(req.body.group_id, 10);
-  const safeGroupId = [1, 2, 3].includes(groupId) ? groupId : 1;
+  const groupExists = db.prepare('SELECT 1 FROM image_groups WHERE id = ?').get(groupId);
+  const safeGroupId = groupExists ? groupId : (db.prepare('SELECT id FROM image_groups ORDER BY id ASC LIMIT 1').get()?.id ?? 1);
 
   const { m } = db.prepare(
     `SELECT COALESCE(MAX(order_index), -1) AS m FROM images WHERE active = 1 AND group_id = ?`
