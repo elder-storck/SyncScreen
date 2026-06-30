@@ -24,6 +24,8 @@
     .group-name-input { border: 1px solid #0d6efd; border-radius: 3px; background: #fff; padding: 0 4px; font-weight: 600; font-size: .9rem; width: 120px; outline: none; }
     .group-edit-btn { cursor: pointer; opacity: .4; font-size: .75rem; margin-left: 5px; transition: opacity .15s; vertical-align: middle; }
     .group-edit-btn:hover { opacity: 1; }
+    .group-del-btn  { cursor: pointer; opacity: .35; font-size: .7rem; margin-left: 3px; color: #dc3545; transition: opacity .15s; vertical-align: middle; }
+    .group-del-btn:hover  { opacity: 1; }
   </style>
 </head>
 <body>
@@ -99,9 +101,6 @@
           <label class="form-label small fw-semibold">Modo</label>
           <select class="form-select form-select-sm" id="m-mode" onchange="onModalModeChange()">
             <option value="webview">🌐 Site (WebView)</option>
-            <option value="slideshow_1">🖼 Grupo 1</option>
-            <option value="slideshow_2">🖼 Grupo 2</option>
-            <option value="slideshow_3">🖼 Grupo 3</option>
           </select>
         </div>
         <div class="mb-3" id="m-url-row" style="display:none">
@@ -220,21 +219,21 @@ async function openTV(id, name) {
   document.getElementById('modal-tv-id').value = id;
   document.getElementById('modal-tv-name').textContent = name;
 
-  // Atualiza nomes dos grupos no select
+  // Reconstrói opções de slideshow no select a partir dos grupos atuais
   const groups = await api('/api/image-groups') ?? [];
   const select = document.getElementById('m-mode');
-  groups.forEach(g => {
-    const opt = select.querySelector(`option[value="slideshow_${g.id}"]`);
-    if (opt) opt.textContent = `🖼 ${g.name}`;
-  });
+  [...select.options].filter(o => o.value.startsWith('slideshow_')).forEach(o => o.remove());
+  groups.forEach(g => select.appendChild(new Option(`🖼 ${g.name}`, `slideshow_${g.id}`)));
 
   const cfg = await api(`/api/config/${id}`);
-  let modeVal = 'slideshow_1';
+  const firstId = groups[0]?.id ?? 1;
+  let modeVal = `slideshow_${firstId}`;
   if (cfg) {
     if (cfg.mode === 'webview') {
       modeVal = 'webview';
     } else {
-      modeVal = `slideshow_${cfg.image_group ?? 1}`;
+      const gid = cfg.image_group ?? firstId;
+      modeVal = groups.some(g => g.id === gid) ? `slideshow_${gid}` : `slideshow_${firstId}`;
     }
     document.getElementById('m-url').value      = cfg.webview_url || '';
     document.getElementById('m-interval').value = cfg.slide_interval || 5;
@@ -283,6 +282,8 @@ async function loadImages() {
   tabsEl.innerHTML    = '';
   contentEl.innerHTML = '';
 
+  const canDelete = imageGroups.length > 1;
+
   imageGroups.forEach((group, i) => {
     const isActive = activeGroupId ? group.id === activeGroupId : i === 0;
     const groupImgs = images.filter(img => img.group_id === group.id);
@@ -293,7 +294,7 @@ async function loadImages() {
     li.innerHTML = `
       <button class="nav-link${isActive ? ' active' : ''}" id="tab-g${group.id}"
               data-bs-toggle="tab" data-bs-target="#pane-g${group.id}" type="button">
-        <span id="gname-${group.id}" class="group-name-text">${esc(group.name)}</span><span class="group-edit-btn" onclick="event.stopPropagation();startRename(${group.id})" title="Renomear grupo">✏</span>
+        <span id="gname-${group.id}" class="group-name-text">${esc(group.name)}</span><span class="group-edit-btn" onclick="event.stopPropagation();startRename(${group.id})" title="Renomear grupo">✏</span>${canDelete ? `<span class="group-del-btn" onclick="event.stopPropagation();removeGroup(${group.id})" title="Remover grupo">✕</span>` : ''}
       </button>`;
     tabsEl.appendChild(li);
 
@@ -329,6 +330,28 @@ async function loadImages() {
       </div>`;
     contentEl.appendChild(pane);
   });
+
+  // Botão "+" para adicionar grupo
+  const addLi = document.createElement('li');
+  addLi.className = 'nav-item ms-1';
+  addLi.innerHTML = `<button class="nav-link text-primary" type="button" onclick="addGroup()" title="Novo grupo" style="opacity:.65;font-size:1.1rem;padding:4px 10px">＋</button>`;
+  tabsEl.appendChild(addLi);
+}
+
+async function addGroup() {
+  const result = await api('/api/image-groups', { method: 'POST', json: { name: `Grupo ${imageGroups.length + 1}` } });
+  if (!result) return;
+  await loadImages();
+  const newTab = document.getElementById(`tab-g${result.id}`);
+  if (newTab) bootstrap.Tab.getOrCreateInstance(newTab).show();
+  setTimeout(() => startRename(result.id), 50);
+}
+
+async function removeGroup(groupId) {
+  const g = imageGroups.find(g => g.id === groupId);
+  if (!confirm(`Remover "${g?.name ?? 'este grupo'}"? As imagens serão movidas para outro grupo.`)) return;
+  const ok = await api(`/api/image-groups/${groupId}`, { method: 'DELETE' });
+  if (ok) await loadImages();
 }
 
 function startRename(groupId) {
