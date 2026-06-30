@@ -540,11 +540,16 @@ async function createOffer(tvId) {
 
   // addTransceiver para controlar direção e preferência de codec
   const videoTrack = castStream.getVideoTracks()[0];
-  const transceiver = pc.addTransceiver(videoTrack, { direction: 'sendonly', streams: [castStream] });
 
-  // VP9 é o codec padrão do browser para screen sharing e lida melhor com
-  // slides/PDFs (screen content coding). Não forçamos preferência — deixamos
-  // o browser escolher.
+  // contentHint='detail': informa ao encoder que o conteúdo tem alta nitidez
+  // (slides, texto, PDFs). O Chrome passa a emitir keyframes com mais frequência
+  // e mantém qualidade de imagem em vez de sacrificá-la para reduzir bitrate.
+  // Endereça o freeze em troca de slide: sem hint, VP9 screen content coding
+  // envia quase zero bytes em slide estático → GCC reduz estimativa de banda →
+  // troca de slide strava até o GCC se recuperar.
+  videoTrack.contentHint = 'detail';
+
+  const transceiver = pc.addTransceiver(videoTrack, { direction: 'sendonly', streams: [castStream] });
 
   pc.onicecandidate = ({ candidate }) => {
     if (candidate && castWs?.readyState === WebSocket.OPEN) {
@@ -555,11 +560,16 @@ async function createOffer(tvId) {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Alta prioridade de rede para a stream de vídeo
+  // Piso de bitrate para evitar que o GCC estime banda ~0 durante slide estático.
+  // degradationPreference='maintain-resolution': encoder reduz framerate antes de
+  // resolução, mantendo nitidez do texto na TV.
   const params = transceiver.sender.getParameters();
   if (params.encodings?.length) {
-    params.encodings[0].priority = 'high';
-    params.encodings[0].networkPriority = 'high';
+    params.encodings[0].priority            = 'high';
+    params.encodings[0].networkPriority     = 'high';
+    params.encodings[0].minBitrate          = 500_000;   // 500 kbps — piso GCC
+    params.encodings[0].maxBitrate          = 8_000_000; // 8 Mbps — headroom para troca de slide
+    params.encodings[0].degradationPreference = 'maintain-resolution';
     try { await transceiver.sender.setParameters(params); } catch (_) {}
   }
 
