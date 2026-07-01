@@ -35,9 +35,11 @@ router.put('/:tvId', (req, res) => {
     db.prepare(`SELECT key, value FROM global_config`).all().map(r => [r.key, r.value])
   );
 
-  const safeGroup = [1, 2, 3].includes(parseInt(image_group, 10))
-    ? parseInt(image_group, 10)
-    : 1;
+  const parsedGroup = parseInt(image_group, 10);
+  const groupExists = db.prepare('SELECT 1 FROM image_groups WHERE id = ?').get(parsedGroup);
+  const safeGroup = groupExists
+    ? parsedGroup
+    : (db.prepare('SELECT id FROM image_groups ORDER BY id ASC LIMIT 1').get()?.id ?? 1);
 
   db.prepare(`
     INSERT INTO tv_config (tv_id, mode, webview_url, slide_interval, image_group, updated_at)
